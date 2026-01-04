@@ -393,7 +393,8 @@ function saveCriteriaToJSON(criteria: UnifiedCriteria): void {
 // ============================================================================
 
 /**
- * Load the unified criteria file.
+ * Load the unified criteria file (sync version).
+ * When SQL is enabled, returns cache only (use loadUnifiedCriteriaAsync for fresh data).
  */
 export function loadUnifiedCriteria(): UnifiedCriteria {
   const now = Date.now();
@@ -401,7 +402,12 @@ export function loadUnifiedCriteria(): UnifiedCriteria {
     return criteriaCache;
   }
 
-  // For sync operations, use JSON. SQL loading is async.
+  // When SQL is enabled, return empty object for sync calls
+  // Use loadUnifiedCriteriaAsync() for actual data
+  if (USE_SQL_DATABASE) {
+    return criteriaCache || {};
+  }
+
   const criteria = loadCriteriaFromJSON();
   criteriaCache = criteria;
   criteriaCacheTime = now;
@@ -420,12 +426,7 @@ export async function loadUnifiedCriteriaAsync(): Promise<UnifiedCriteria> {
   let criteria: UnifiedCriteria;
 
   if (USE_SQL_DATABASE) {
-    try {
-      criteria = await loadCriteriaFromSQL();
-    } catch (error) {
-      console.error('Failed to load from SQL, falling back to JSON:', error);
-      criteria = loadCriteriaFromJSON();
-    }
+    criteria = await loadCriteriaFromSQL();
   } else {
     criteria = loadCriteriaFromJSON();
   }
@@ -437,6 +438,7 @@ export async function loadUnifiedCriteriaAsync(): Promise<UnifiedCriteria> {
 
 /**
  * Save the unified criteria file.
+ * When SQL is enabled, this only updates the cache (SQL writes are handled separately).
  */
 export function saveUnifiedCriteria(criteria: UnifiedCriteria): void {
   // Sort domains alphabetically
@@ -445,7 +447,11 @@ export function saveUnifiedCriteria(criteria: UnifiedCriteria): void {
     sorted[domain] = criteria[domain];
   }
 
-  saveCriteriaToJSON(sorted);
+  // Only write to JSON file when SQL is disabled
+  if (!USE_SQL_DATABASE) {
+    saveCriteriaToJSON(sorted);
+  }
+
   criteriaCache = sorted;
   criteriaCacheTime = Date.now();
 }
