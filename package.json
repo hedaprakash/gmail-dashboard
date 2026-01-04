@@ -1,0 +1,59 @@
+{
+  "name": "gmail-dashboard",
+  "version": "1.0.0",
+  "description": "Gmail Cleanup Dashboard - Manage email cleanup with an interactive web interface",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "nodemon --exec \"npx tsx\" server/index.ts",
+    "dev:client": "vite",
+    "build": "vite build && npm run build:server",
+    "build:server": "tsc -p tsconfig.server.json",
+    "preview": "vite preview",
+    "start": "node dist/server/index.js",
+    "test": "vitest",
+    "test:e2e": "playwright test",
+    "test:criteria": "npx tsx server/scripts/test-criteria.ts",
+    "migrate": "npx tsx server/scripts/migrate.ts",
+    "db:compare": "npx tsx server/scripts/sync-criteria.ts compare",
+    "db:export": "npx tsx server/scripts/sync-criteria.ts export",
+    "db:import": "npx tsx server/scripts/sync-criteria.ts import"
+  },
+  "keywords": [
+    "gmail",
+    "email",
+    "dashboard",
+    "cleanup"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@tanstack/react-query": "^5.62.0",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "googleapis": "^169.0.0",
+    "mssql": "^12.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/mssql": "^9.1.8",
+    "@types/node": "^25.0.3",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.5.2",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "nodemon": "^3.1.11",
+    "postcss": "^8.5.5",
+    "tailwindcss": "^3.4.1",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  }
+}

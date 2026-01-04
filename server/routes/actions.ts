@@ -1,0 +1,420 @@
+/**
+ * Action Routes - Unified Format
+ *
+ * Handles Keep/Delete/Delete1d button actions using the unified criteria format.
+ */
+
+import { Router, Request, Response } from 'express';
+import {
+  addRule,
+  removeRule,
+  loadUnifiedCriteria,
+  saveUnifiedCriteria,
+  getDomainCriteria,
+  addExcludeSubjects,
+  type Action
+} from '../services/criteria.js';
+import { logKeep, logDelete, logDelete1d, logDelete10d, logUndo } from '../services/actionLogger.js';
+
+const router = Router();
+
+/**
+ * POST /api/actions/add-criteria
+ * Add an entry for immediate deletion.
+ */
+router.post('/add-criteria', (req: Request, res: Response) => {
+  try {
+    const { domain, subject_pattern, exclude_subject } = req.body;
+
+    if (!domain) {
+      res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      });
+      return;
+    }
+
+    // Handle exclude_subject - add to excludeSubjects list
+    if (exclude_subject) {
+      const terms = exclude_subject.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+      if (terms.length > 0) {
+        addExcludeSubjects(domain, terms);
+      }
+    }
+
+    // Add the delete rule
+    addRule(domain, 'delete', subject_pattern || undefined);
+
+    // Log the action
+    logDelete(domain, subject_pattern || '');
+
+    console.log(`Added delete rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
+
+    const rules = getDomainCriteria(domain);
+
+    res.json({
+      success: true,
+      message: subject_pattern ? `Added delete pattern for ${domain}` : `Set default delete for ${domain}`,
+      domain,
+      subjectPattern: subject_pattern,
+      rules
+    });
+  } catch (error) {
+    console.error('Error adding criteria:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/actions/add-criteria-1d
+ * Add an entry for deletion after 1 day.
+ */
+router.post('/add-criteria-1d', (req: Request, res: Response) => {
+  try {
+    const { domain, subject_pattern, exclude_subject } = req.body;
+
+    if (!domain) {
+      res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      });
+      return;
+    }
+
+    // Handle exclude_subject - add to excludeSubjects list
+    if (exclude_subject) {
+      const terms = exclude_subject.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+      if (terms.length > 0) {
+        addExcludeSubjects(domain, terms);
+      }
+    }
+
+    // Add the delete_1d rule
+    addRule(domain, 'delete_1d', subject_pattern || undefined);
+
+    // Log the action
+    logDelete1d(domain, subject_pattern || '');
+
+    console.log(`Added delete_1d rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
+
+    const rules = getDomainCriteria(domain);
+
+    res.json({
+      success: true,
+      message: subject_pattern ? `Added delete_1d pattern for ${domain}` : `Set default delete_1d for ${domain}`,
+      domain,
+      subjectPattern: subject_pattern,
+      rules
+    });
+  } catch (error) {
+    console.error('Error adding 1-day criteria:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/actions/add-criteria-10d
+ * Add an entry for deletion after 10 days.
+ */
+router.post('/add-criteria-10d', (req: Request, res: Response) => {
+  try {
+    const { domain, subject_pattern, exclude_subject } = req.body;
+
+    if (!domain) {
+      res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      });
+      return;
+    }
+
+    // Handle exclude_subject - add to excludeSubjects list
+    if (exclude_subject) {
+      const terms = exclude_subject.split(',').map((t: string) => t.trim()).filter((t: string) => t);
+      if (terms.length > 0) {
+        addExcludeSubjects(domain, terms);
+      }
+    }
+
+    // Add the delete_10d rule
+    addRule(domain, 'delete_10d', subject_pattern || undefined);
+
+    // Log the action
+    logDelete10d(domain, subject_pattern || '');
+
+    console.log(`Added delete_10d rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
+
+    const rules = getDomainCriteria(domain);
+
+    res.json({
+      success: true,
+      message: subject_pattern ? `Added delete_10d pattern for ${domain}` : `Set default delete_10d for ${domain}`,
+      domain,
+      subjectPattern: subject_pattern,
+      rules
+    });
+  } catch (error) {
+    console.error('Error adding 10-day criteria:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/actions/mark-keep
+ * Mark an email pattern as 'keep' - removes from delete criteria AND adds to keep.
+ */
+router.post('/mark-keep', (req: Request, res: Response) => {
+  try {
+    const { domain, subject_pattern, category } = req.body;
+
+    if (!domain) {
+      res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      });
+      return;
+    }
+
+    const criteria = loadUnifiedCriteria();
+    const domainLower = domain.toLowerCase();
+    let removedCount = 0;
+
+    // 1. Remove from delete/delete_1d/delete_10d if present
+    if (criteria[domainLower]) {
+      const rules = criteria[domainLower];
+
+      if (subject_pattern) {
+        // Remove specific subject pattern from delete lists
+        for (const key of ['delete', 'delete_1d', 'delete_10d'] as const) {
+          if (rules[key]) {
+            const patternLower = subject_pattern.toLowerCase();
+            const idx = rules[key]!.findIndex(p => p.toLowerCase() === patternLower);
+            if (idx >= 0) {
+              rules[key]!.splice(idx, 1);
+              if (rules[key]!.length === 0) delete rules[key];
+              removedCount++;
+            }
+          }
+        }
+        // If default was delete/delete_1d/delete_10d and we're keeping this pattern, add to keep list
+        if (rules.default === 'delete' || rules.default === 'delete_1d' || rules.default === 'delete_10d') {
+          // Pattern is now kept, but domain default still deletes
+        }
+      } else {
+        // Domain-level keep - clear delete defaults
+        if (rules.default === 'delete' || rules.default === 'delete_1d' || rules.default === 'delete_10d') {
+          delete rules.default;
+          removedCount++;
+        }
+        // Clear any delete subject patterns
+        if (rules.delete) {
+          removedCount += rules.delete.length;
+          delete rules.delete;
+        }
+        if (rules.delete_1d) {
+          removedCount += rules.delete_1d.length;
+          delete rules.delete_1d;
+        }
+        if (rules.delete_10d) {
+          removedCount += rules.delete_10d.length;
+          delete rules.delete_10d;
+        }
+      }
+    }
+
+    // 2. Add to keep
+    addRule(domain, 'keep', subject_pattern || undefined);
+
+    // 3. Save if we modified the criteria
+    if (removedCount > 0) {
+      saveUnifiedCriteria(criteria);
+    }
+
+    // Log the action
+    logKeep(domain, subject_pattern || '', category, removedCount);
+
+    console.log(`Marked keep: ${domain} (subject: ${subject_pattern || '(all)'}) - removed ${removedCount} delete rules`);
+
+    const rules = getDomainCriteria(domain);
+
+    res.json({
+      success: true,
+      message: subject_pattern
+        ? `Added keep pattern for ${domain}`
+        : `Set default keep for ${domain}`,
+      domain,
+      subjectPattern: subject_pattern,
+      rules,
+      removed_from_delete: removedCount
+    });
+  } catch (error) {
+    console.error('Error marking keep:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/actions/undo-last
+ * Undo the last action is not straightforward with unified format.
+ * This endpoint is deprecated - use specific remove endpoints instead.
+ */
+router.post('/undo-last', (req: Request, res: Response) => {
+  try {
+    const { domain, action, subject_pattern } = req.body as {
+      domain?: string;
+      action?: Action;
+      subject_pattern?: string;
+    };
+
+    if (!domain) {
+      res.status(400).json({
+        success: false,
+        error: 'Domain is required for undo in unified format'
+      });
+      return;
+    }
+
+    const removed = removeRule(domain, action, subject_pattern);
+
+    if (!removed) {
+      res.status(404).json({
+        success: false,
+        error: 'Rule not found'
+      });
+      return;
+    }
+
+    // Log the undo action
+    logUndo(domain, subject_pattern || '', action || 'unknown');
+
+    console.log(`Undid rule: ${domain} ${action || ''} ${subject_pattern || ''}`);
+
+    res.json({
+      success: true,
+      message: 'Rule removed',
+      domain,
+      action,
+      subject_pattern
+    });
+  } catch (error) {
+    console.error('Error undoing:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/actions/set-default
+ * Set the default action for a domain.
+ */
+router.post('/set-default', (req: Request, res: Response) => {
+  try {
+    const { domain, action } = req.body as {
+      domain: string;
+      action: Action;
+    };
+
+    if (!domain) {
+      res.status(400).json({
+        success: false,
+        error: 'Domain is required'
+      });
+      return;
+    }
+
+    if (!action || !['delete', 'delete_1d', 'delete_10d', 'keep'].includes(action)) {
+      res.status(400).json({
+        success: false,
+        error: 'Valid action is required (delete, delete_1d, delete_10d, keep)'
+      });
+      return;
+    }
+
+    addRule(domain, action);
+
+    console.log(`Set default ${action} for ${domain}`);
+
+    const rules = getDomainCriteria(domain);
+
+    res.json({
+      success: true,
+      message: `Set default ${action} for ${domain}`,
+      domain,
+      action,
+      rules
+    });
+  } catch (error) {
+    console.error('Error setting default:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/actions/add-pattern
+ * Add a subject pattern for a specific action.
+ */
+router.post('/add-pattern', (req: Request, res: Response) => {
+  try {
+    const { domain, action, pattern } = req.body as {
+      domain: string;
+      action: Action;
+      pattern: string;
+    };
+
+    if (!domain || !pattern) {
+      res.status(400).json({
+        success: false,
+        error: 'Domain and pattern are required'
+      });
+      return;
+    }
+
+    if (!action || !['delete', 'delete_1d', 'delete_10d', 'keep'].includes(action)) {
+      res.status(400).json({
+        success: false,
+        error: 'Valid action is required (delete, delete_1d, delete_10d, keep)'
+      });
+      return;
+    }
+
+    addRule(domain, action, pattern);
+
+    console.log(`Added ${action} pattern for ${domain}: "${pattern}"`);
+
+    const rules = getDomainCriteria(domain);
+
+    res.json({
+      success: true,
+      message: `Added ${action} pattern for ${domain}`,
+      domain,
+      action,
+      pattern,
+      rules
+    });
+  } catch (error) {
+    console.error('Error adding pattern:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+export default router;
