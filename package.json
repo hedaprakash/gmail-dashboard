@@ -4,9 +4,9 @@
   "description": "Gmail Cleanup Dashboard - Manage email cleanup with an interactive web interface",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "nodemon --exec \"npx tsx\" server/index.ts",
-    "dev:client": "vite",
+    "dev": "npx kill-port 3000 5000 && concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "nodemon",
+    "dev:client": "vite --strictPort",
     "build": "vite build && npm run build:server",
     "build:server": "tsc -p tsconfig.server.json",
     "preview": "vite preview",

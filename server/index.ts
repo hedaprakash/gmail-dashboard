@@ -12,6 +12,7 @@ import emailRoutes from './routes/emails.js';
 import criteriaRoutes from './routes/criteria.js';
 import actionRoutes from './routes/actions.js';
 import executeRoutes from './routes/execute.js';
+import authRoutes from './routes/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,6 +26,9 @@ app.use('/api/emails', emailRoutes);
 app.use('/api/criteria', criteriaRoutes);
 app.use('/api/actions', actionRoutes);
 app.use('/api/execute', executeRoutes);
+
+// Auth Routes (OAuth flow - no /api prefix)
+app.use('/auth', authRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -54,6 +58,10 @@ app.listen(PORT, () => {
   console.log(`  POST /api/actions/add-criteria - Add to delete`);
   console.log(`  POST /api/execute/preview - Preview deletion`);
   console.log(`  POST /api/execute/delete - Execute deletion`);
+  console.log(`  GET  /auth/status     - Check auth status`);
+  console.log(`  GET  /auth/login      - Start OAuth flow`);
+  console.log(`  GET  /auth/callback   - OAuth callback`);
+  console.log(`  POST /auth/logout     - Logout`);
 });
 
 export default app;

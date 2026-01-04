@@ -292,3 +292,72 @@ docker-compose down && docker-compose up -d
 | `logs/*.json` | Cached email data (gitignored) |
 | `logs/actions.log` | User action history (gitignored) |
 | `.env` | Environment variables (gitignored) |
+
+## Skills
+
+### /test-app
+**Trigger phrases:** "test the app", "run tests", "test everything", "initiate testing", "run /test-app", "start and test"
+
+**Action:** Immediately execute the full test workflow without asking questions.
+
+**Workflow:**
+1. Kill existing processes on ports 3000 and 5000
+2. Start the dev servers (`npm run dev`)
+3. Wait for servers to be ready (check health endpoints)
+4. Run Playwright E2E tests
+5. Check OAuth authentication status
+6. Generate a status report
+
+**Report format:**
+```
+## Test Report
+
+### Server Status
+- Backend (5000): ✅ Running / ❌ Down
+- Frontend (3000): ✅ Running / ❌ Down
+
+### Authentication
+- Status: ✅ Authenticated / ❌ Not authenticated
+
+### E2E Tests
+- Total: X tests
+- Passed: X ✅
+- Failed: X ❌
+
+### Quick Links
+- Dashboard: http://localhost:3000
+- API Health: http://localhost:5000/api/health
+```
+
+---
+
+## Rules for Claude (MUST FOLLOW)
+
+### 1. Never Use Alternative Ports
+- **ALWAYS** kill existing processes before starting servers
+- **NEVER** let Vite or Express use a different port if the default is busy
+- Use `npx kill-port 3000 5000` before starting dev servers
+- The `npm run dev` script already does this automatically
+
+### 2. Starting Dev Servers
+```bash
+# Correct way - kills existing and starts fresh
+npm run dev
+
+# If running manually, always kill first
+npx kill-port 3000 5000 && npm run dev
+```
+
+### 3. Port Assignments (Fixed)
+- Frontend (Vite): **3000** - never use 3001 or other ports
+- Backend (Express): **5000** - never use 5001 or other ports
+- Vite is configured with `--strictPort` to fail instead of using alternative ports
+
+### 4. Background Tasks
+- When starting servers in background, always verify they started on correct ports
+- If ports are wrong, kill and restart - don't proceed with wrong ports
+
+### 5. Never Run Destructive Git Commands Without Permission
+- **NEVER** run `git reset --hard`, `git clean -fd`, `git checkout .`, or any command that discards uncommitted work without **explicit user permission**
+- **ALWAYS** ask before running any command that could delete or overwrite uncommitted changes
+- When fixing issues (like line endings), explain the solution first and ask for approval before executing

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { useEmails, useMarkKeep, useAddCriteria, useAddCriteria1d, useAddCriteria10d, formatDateRange } from '../hooks/useEmails';
 import type { DomainGroup } from '../hooks/useEmails';
 import StatsCard from '../components/Stats/StatsCard';

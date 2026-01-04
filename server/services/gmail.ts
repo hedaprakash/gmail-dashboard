@@ -19,6 +19,9 @@ const CREDENTIALS_PATH = path.join(DATA_DIR, 'credentials.json');
 const BATCH_SIZE = 100;
 
 let gmailService: gmail_v1.Gmail | null = null;
+let cachedOAuth2Client: InstanceType<typeof google.auth.OAuth2> | null = null;
+
+const REDIRECT_URI = "http://localhost:5000/auth/callback";
 
 /**
  * Extract email address from a header like 'Name <email@domain.com>'.
@@ -78,6 +81,107 @@ function getHeaderValue(headers: gmail_v1.Schema$MessagePartHeader[], name: stri
   return header?.value ?? '';
 }
 
+
+/**
+ * Get token expiry time in milliseconds.
+ * Handles both 'expiry_date' (number) and 'expiry' (ISO string) formats.
+ */
+function getTokenExpiry(token: Record<string, unknown>): number | null {
+  if (token.expiry_date && typeof token.expiry_date === 'number') {
+    return token.expiry_date;
+  }
+  if (token.expiry && typeof token.expiry === 'string') {
+    return new Date(token.expiry).getTime();
+  }
+  return null;
+}
+
+/**
+ * Get or create OAuth2 client.
+ */
+function getOAuth2Client(): InstanceType<typeof google.auth.OAuth2> {
+  if (cachedOAuth2Client) {
+    return cachedOAuth2Client;
+  }
+  if (!fs.existsSync(CREDENTIALS_PATH)) {
+    throw new Error('credentials.json not found');
+  }
+  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf-8'));
+  const { client_id, client_secret } = credentials.installed || credentials.web;
+  cachedOAuth2Client = new google.auth.OAuth2(client_id, client_secret, REDIRECT_URI);
+  return cachedOAuth2Client;
+}
+
+/**
+ * Check if user is authenticated (has valid token).
+ */
+export function isAuthenticated(): { authenticated: boolean; email?: string } {
+  if (!fs.existsSync(TOKEN_PATH)) {
+    return { authenticated: false };
+  }
+  try {
+    const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
+    const expiry = getTokenExpiry(token);
+    if (expiry && Date.now() >= expiry - 5 * 60 * 1000) {
+      if (!token.refresh_token) {
+        return { authenticated: false };
+      }
+    }
+    const email = token.email || token.account || undefined;
+    return { authenticated: true, email };
+  } catch {
+    return { authenticated: false };
+  }
+}
+
+/**
+ * Get OAuth URL for user to authorize.
+ */
+export function getAuthUrl(): string {
+  const oauth2Client = getOAuth2Client();
+  return oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: SCOPES,
+    prompt: 'consent'
+  });
+}
+
+/**
+ * Handle OAuth callback - exchange code for tokens.
+ */
+export async function handleAuthCallback(code: string): Promise<{ success: boolean; email?: string; error?: string }> {
+  try {
+    const oauth2Client = getOAuth2Client();
+    const { tokens } = await oauth2Client.getToken(code);
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
+    oauth2Client.setCredentials(tokens);
+    gmailService = null;
+    let email: string | undefined;
+    try {
+      const gmail = google.gmail({ version: 'v1', auth: oauth2Client as unknown as OAuth2Client });
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      email = profile.data.emailAddress || undefined;
+      const updatedTokens = { ...tokens, email };
+      fs.writeFileSync(TOKEN_PATH, JSON.stringify(updatedTokens, null, 2));
+    } catch { }
+    return { success: true, email };
+  } catch (error) {
+    console.error('Error handling auth callback:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+/**
+ * Clear authentication (logout).
+ */
+export function clearAuth(): void {
+  if (fs.existsSync(TOKEN_PATH)) {
+    fs.unlinkSync(TOKEN_PATH);
+  }
+  gmailService = null;
+  cachedOAuth2Client = null;
+}
+
 /**
  * Get or create Gmail API service.
  */
@@ -86,35 +190,29 @@ export async function getGmailService(): Promise<gmail_v1.Gmail> {
     return gmailService;
   }
 
-  // Load credentials
-  if (!fs.existsSync(CREDENTIALS_PATH)) {
-    throw new Error(`credentials.json not found at ${CREDENTIALS_PATH}`);
-  }
-
-  const credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf-8'));
-  const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web;
-
-  const oauth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris?.[0]);
+  const oauth2Client = getOAuth2Client();
 
   // Load token
-  if (fs.existsSync(TOKEN_PATH)) {
-    const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
-    oauth2Client.setCredentials(token);
+  if (!fs.existsSync(TOKEN_PATH)) {
+    throw new Error('NOT_AUTHENTICATED');
+  }
 
-    // Check if token needs refresh
-    if (token.expiry_date && Date.now() >= token.expiry_date) {
-      try {
-        const { credentials: newCredentials } = await oauth2Client.refreshAccessToken();
-        oauth2Client.setCredentials(newCredentials);
-        fs.writeFileSync(TOKEN_PATH, JSON.stringify(newCredentials));
-        console.log('Token refreshed');
-      } catch (error) {
-        console.error('Error refreshing token:', error);
-        throw new Error('Token expired. Please re-authenticate using the Python scripts first.');
-      }
+  const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
+  oauth2Client.setCredentials(token);
+
+  // Check if token needs refresh (handles both expiry and expiry_date)
+  const expiry = getTokenExpiry(token);
+  if (expiry && Date.now() >= expiry) {
+    try {
+      const { credentials: newCredentials } = await oauth2Client.refreshAccessToken();
+      oauth2Client.setCredentials(newCredentials);
+      const updatedCredentials = { ...newCredentials, email: token.email };
+      fs.writeFileSync(TOKEN_PATH, JSON.stringify(updatedCredentials, null, 2));
+      console.log('Token refreshed');
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      throw new Error('TOKEN_EXPIRED');
     }
-  } else {
-    throw new Error('token.json not found. Please authenticate using the Python scripts first.');
   }
 
   gmailService = google.gmail({ version: 'v1', auth: oauth2Client as unknown as OAuth2Client });
