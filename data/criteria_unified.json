@@ -635,7 +635,14 @@
       "Important! Please update your Passport with Bank",
       "Your Renewal Fixed deposit advice"
     ],
-    "default": "delete_10d"
+    "default": "delete_10d",
+    "delete": [
+      "View: Account update for your HDFC Bank A/c",
+      "Account update for your",
+      "HDFC Bank Combined Email",
+      "FD booking for NRE",
+      "No Action Needed"
+    ]
   },
   "heygen.com": {
     "default": "delete"

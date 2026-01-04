@@ -145,26 +145,32 @@ router.post('/refresh', async (_req: Request, res: Response) => {
     await query('TRUNCATE TABLE pending_emails');
     console.log('Cleared pending_emails table');
 
-    // Bulk insert emails
+    // Bulk insert emails (column sizes must match table schema exactly)
     const pool = await getPool();
     const table = new sql.Table('pending_emails');
     table.create = false;
-    table.columns.add('GmailId', sql.NVarChar(100), { nullable: false });
-    table.columns.add('FromEmail', sql.NVarChar(500), { nullable: true });
-    table.columns.add('ToEmail', sql.NVarChar(500), { nullable: true });
-    table.columns.add('Subject', sql.NVarChar(1000), { nullable: true });
+    // Match exact schema: Id is auto-increment so we skip it
+    table.columns.add('GmailId', sql.NVarChar(100), { nullable: true });
+    table.columns.add('FromEmail', sql.NVarChar(255), { nullable: true });
+    table.columns.add('ToEmail', sql.NVarChar(255), { nullable: true });
+    table.columns.add('Subject', sql.NVarChar(500), { nullable: true });
     table.columns.add('PrimaryDomain', sql.NVarChar(255), { nullable: true });
     table.columns.add('Subdomain', sql.NVarChar(255), { nullable: true });
     table.columns.add('EmailDate', sql.DateTime, { nullable: true });
-    table.columns.add('ReceivedAt', sql.DateTime, { nullable: false });
+    table.columns.add('ReceivedAt', sql.DateTime, { nullable: true });
     table.columns.add('Action', sql.NVarChar(20), { nullable: true });
 
     for (const email of emails) {
+      // Truncate fields to fit column sizes
+      const fromEmail = (email.from || '').slice(0, 255) || null;
+      const toEmail = (email.to || '').slice(0, 255) || null;
+      const subject = (email.subject || '').slice(0, 500) || null;
+
       table.rows.add(
         email.id,
-        email.from || null,
-        email.to || null,
-        email.subject || null,
+        fromEmail,
+        toEmail,
+        subject,
         email.primaryDomain || null,
         email.subdomain || null,
         email.date ? new Date(email.date) : null,
