@@ -1,0 +1,1489 @@
+{
+  "10times.com": {
+    "default": "delete"
+  },
+  "1105info.com": {
+    "default": "delete"
+  },
+  "1105newsletters.com": {
+    "default": "delete"
+  },
+  "5gstore.com": {
+    "default": "delete"
+  },
+  "99acres.com": {
+    "default": "delete"
+  },
+  "abesofmaine.com": {
+    "default": "delete"
+  },
+  "absolute-snow.co.uk": {
+    "default": "delete"
+  },
+  "activeandfitdirect.com": {
+    "default": "delete"
+  },
+  "adidas.in": {
+    "default": "delete_1d",
+    "keep": [
+      "Order"
+    ]
+  },
+  "ahswarranty.com": {
+    "default": "delete"
+  },
+  "aiprm.com": {
+    "default": "delete"
+  },
+  "airalo.com": {
+    "default": "delete_1d"
+  },
+  "airindia.com": {
+    "default": "delete"
+  },
+  "aliexpress.com": {
+    "default": "delete"
+  },
+  "aloft.ai": {
+    "delete": [
+      "NPRM Webinar Reminder"
+    ]
+  },
+  "altais.com": {
+    "default": "keep"
+  },
+  "amazon.com": {
+    "default": "delete"
+  },
+  "amazon.in": {
+    "default": "delete"
+  },
+  "amazonpay.in": {
+    "default": "keep"
+  },
+  "amctheatres.com": {
+    "default": "delete_1d"
+  },
+  "americanexpress.com": {
+    "default": "delete"
+  },
+  "amfam.com": {
+    "default": "keep"
+  },
+  "anker.com": {
+    "delete": [
+      "Reminder: Please Sign and Upload Your NDA"
+    ]
+  },
+  "anthem.com": {
+    "default": "keep"
+  },
+  "anthonypresents.com": {
+    "default": "delete"
+  },
+  "anthropic.com": {
+    "keep": [
+      "Your receipt from Anthropic"
+    ]
+  },
+  "aol.com": {
+    "default": "delete"
+  },
+  "appfolio.com": {
+    "default": "delete"
+  },
+  "apple.com": {
+    "subdomains": {
+      "email.apple.com": {
+        "delete": [
+          "Get your new iPhone",
+          "has been updated"
+        ],
+        "keep": [
+          "Preeti Dua invited"
+        ]
+      },
+      "insideapple.apple.com": {
+        "default": "delete"
+      }
+    }
+  },
+  "arizent.com": {
+    "default": "delete"
+  },
+  "ark-funds.com": {
+    "default": "delete"
+  },
+  "arkfunds.com": {
+    "default": "delete"
+  },
+  "arkinvest.com": {
+    "default": "delete"
+  },
+  "astound.com": {
+    "default": "keep"
+  },
+  "asuswebstorage.com": {
+    "default": "delete"
+  },
+  "atlassian.com": {
+    "delete": [
+      "Upcoming changes to Free Bitbucket workspaces"
+    ]
+  },
+  "atthecrossroads.org": {
+    "default": "delete"
+  },
+  "augmentcode.com": {
+    "default": "delete_1d"
+  },
+  "avail.co": {
+    "default": "keep"
+  },
+  "avature.net": {
+    "delete": [
+      "KPMG LLP Follow-Up for the Lead Specialist, Databa"
+    ]
+  },
+  "avis.com": {
+    "default": "delete"
+  },
+  "aws-experience.com": {
+    "delete": [
+      "Your event is about to start"
+    ]
+  },
+  "aws.com": {
+    "delete_1d": [
+      "Important Notification Regarding Your AWS Marketpl"
+    ]
+  },
+  "bedbathandbeyond.com": {
+    "default": "delete"
+  },
+  "bedjet.com": {
+    "default": "delete_1d"
+  },
+  "beehiiv.com": {
+    "default": "delete_1d"
+  },
+  "bestbuy.com": {
+    "default": "delete",
+    "keep": [
+      "Order"
+    ]
+  },
+  "bing.com": {
+    "default": "delete"
+  },
+  "blink.com": {
+    "default": "delete"
+  },
+  "blinknetwork.com": {
+    "default": "keep"
+  },
+  "breadfinancial.com": {
+    "default": "keep"
+  },
+  "builder.io": {
+    "default": "delete"
+  },
+  "builtin.com": {
+    "default": "delete"
+  },
+  "builtinaustin.com": {
+    "default": "delete"
+  },
+  "buymeacoffee.com": {
+    "default": "delete"
+  },
+  "c21selectgroup.com": {
+    "default": "delete"
+  },
+  "ca.gov": {
+    "default": "keep"
+  },
+  "camsmgt.com": {
+    "default": "keep"
+  },
+  "canva.com": {
+    "default": "delete"
+  },
+  "capcut.com": {
+    "default": "delete",
+    "keep": [
+      "order"
+    ]
+  },
+  "care.com": {
+    "default": "delete_1d"
+  },
+  "careerbuilder.com": {
+    "default": "delete"
+  },
+  "carrier.com": {
+    "delete": [
+      "Service Fully Restored"
+    ]
+  },
+  "carvana.com": {
+    "default": "delete"
+  },
+  "cbintouch.com": {
+    "default": "delete"
+  },
+  "ccsend.com": {
+    "default": "delete"
+  },
+  "cedars-sinai.org": {
+    "default": "keep"
+  },
+  "certmetrics.com": {
+    "delete": [
+      "Important: Your AWS Certification expires on Feb 1"
+    ]
+  },
+  "chargepoint.com": {
+    "default": "delete"
+  },
+  "chase.com": {
+    "default": "delete"
+  },
+  "chrispessy.com": {
+    "default": "delete"
+  },
+  "chugh.com": {
+    "default": "delete"
+  },
+  "cinemark.com": {
+    "default": "keep"
+  },
+  "cio.com": {
+    "default": "delete"
+  },
+  "circlemedical.co": {
+    "default": "delete"
+  },
+  "citi.com": {
+    "default": "keep"
+  },
+  "citysportsfitness.com": {
+    "default": "delete"
+  },
+  "claude.com": {
+    "default": "delete_1d"
+  },
+  "clerk.com": {
+    "delete": [
+      "Clerk Update – Oct 31, 2025",
+      "Clerk Update – Sept 9, 2025",
+      "Clerk Update"
+    ]
+  },
+  "cloudflare.com": {
+    "delete_1d": [
+      "Your login token for the Cloudflare dashboard"
+    ]
+  },
+  "cnbc.com": {
+    "default": "delete"
+  },
+  "columbia.com": {
+    "default": "delete"
+  },
+  "comcast.net": {
+    "default": "delete"
+  },
+  "comenity.net": {
+    "default": "keep"
+  },
+  "conciergeauctions.com": {
+    "default": "delete"
+  },
+  "conferencecalltranscripts.com": {
+    "default": "delete_1d"
+  },
+  "connectbyamfam.com": {
+    "default": "keep"
+  },
+  "content-magazine.com": {
+    "default": "delete"
+  },
+  "costco.com": {
+    "default": "delete",
+    "keep": [
+      "Order"
+    ]
+  },
+  "cozymaid.com": {
+    "default": "delete"
+  },
+  "craigslisasdasdt.org": {
+    "default": "delete"
+  },
+  "creditkarma.com": {
+    "default": "delete"
+  },
+  "crexi.com": {
+    "default": "delete"
+  },
+  "cvs.com": {
+    "default": "keep"
+  },
+  "d-id.com": {
+    "default": "delete"
+  },
+  "datamaticsrta.com": {
+    "delete": [
+      "HDFC BANK LTD -  Allotment of Bonus Equity Share(s",
+      "HDFC Bank Limited -  Initial Public Offering (“IPO"
+    ]
+  },
+  "davivienda.cr": {
+    "default": "keep"
+  },
+  "deepseek.com": {
+    "default": "delete"
+  },
+  "delinea.com": {
+    "default": "delete_1d"
+  },
+  "dell.com": {
+    "default": "delete"
+  },
+  "delta.com": {
+    "default": "delete"
+  },
+  "demandforced3.com": {
+    "default": "delete"
+  },
+  "dice.com": {
+    "default": "delete"
+  },
+  "digitalocean.com": {
+    "default": "delete"
+  },
+  "digitaltrends.com": {
+    "default": "delete"
+  },
+  "discord.com": {
+    "default": "delete"
+  },
+  "discoursemail.com": {
+    "default": "delete"
+  },
+  "discover.com": {
+    "default": "delete"
+  },
+  "disneyplus.com": {
+    "default": "delete"
+  },
+  "dispatch.me": {
+    "default": "keep"
+  },
+  "disqus.net": {
+    "default": "delete"
+  },
+  "dmpmusicgroup.com": {
+    "default": "delete"
+  },
+  "docusign.com": {
+    "delete": [
+      "You tried signing, so try this",
+      "Hi, you've signed and sent, bu"
+    ]
+  },
+  "dominionenergyaccount.com": {
+    "subdomains": {
+      "sc.dominionenergyaccount.com": {
+        "default": "keep"
+      }
+    }
+  },
+  "dominionenergyinfo.com": {
+    "delete": [
+      "Here to Help - Assistance & Energy Savings Availab"
+    ],
+    "subdomains": {
+      "customersc.dominionenergyinfo.com": {
+        "default": "delete"
+      }
+    }
+  },
+  "dominos.com": {
+    "default": "delete"
+  },
+  "drstephaniebridwell.com": {
+    "default": "delete"
+  },
+  "dvcapp.com": {
+    "default": "delete"
+  },
+  "e-vanguard.com": {
+    "delete": [
+      "Preeti, schedule a free meeting with a Vanguard ad",
+      "Meet your 2025 savings goals, Preeti",
+      "Increase your retirement savings, Preeti",
+      "Unloc(k) your potential"
+    ]
+  },
+  "ebay.com": {
+    "default": "delete",
+    "keep": [
+      "Order"
+    ]
+  },
+  "economictimes.com": {
+    "default": "delete"
+  },
+  "economictimesnews.com": {
+    "default": "delete"
+  },
+  "email-fordpassrewards.com": {
+    "default": "delete"
+  },
+  "email-lenovo.com": {
+    "default": "delete"
+  },
+  "email-marriott.com": {
+    "default": "delete"
+  },
+  "emeraldx.com": {
+    "default": "delete"
+  },
+  "emporiaenergy.com": {
+    "default": "delete"
+  },
+  "epicpass.com": {
+    "default": "delete"
+  },
+  "epicpassmail.com": {
+    "default": "delete"
+  },
+  "epiqpay.com": {
+    "default": "delete"
+  },
+  "equitymaster.com": {
+    "default": "delete"
+  },
+  "etrade.com": {
+    "default": "delete"
+  },
+  "etradefinancial.com": {
+    "default": "delete"
+  },
+  "etradefrommorganstanley.com": {
+    "default": "delete_10d"
+  },
+  "etsy.com": {
+    "default": "delete_1d",
+    "keep": [
+      "Order"
+    ]
+  },
+  "eufylife.com": {
+    "default": "delete_1d"
+  },
+  "eventbrite.com": {
+    "default": "delete"
+  },
+  "expedia.com": {
+    "default": "delete"
+  },
+  "expediamail.com": {
+    "default": "delete"
+  },
+  "explorehidden.com": {
+    "default": "delete"
+  },
+  "eyeappts.com": {
+    "default": "delete_1d"
+  },
+  "facebookmail.com": {
+    "default": "delete"
+  },
+  "fidelity.com": {
+    "default": "delete"
+  },
+  "finviz.com": {
+    "default": "delete_1d"
+  },
+  "fleetfeet.com": {
+    "default": "delete"
+  },
+  "flightaware.com": {
+    "delete": [
+      "We’ve updated our Terms & Conditions of Sale"
+    ]
+  },
+  "flipkart.com": {
+    "default": "delete"
+  },
+  "flybayarea.com": {
+    "default": "delete"
+  },
+  "fool.com": {
+    "default": "delete"
+  },
+  "foolsubs.com": {
+    "default": "delete"
+  },
+  "ford.com": {
+    "default": "delete_1d"
+  },
+  "freelancer.com": {
+    "default": "delete"
+  },
+  "fsastore.com": {
+    "default": "delete_1d"
+  },
+  "garmin.com": {
+    "default": "delete"
+  },
+  "getmunch.com": {
+    "default": "delete"
+  },
+  "gitguardian.com": {
+    "default": "delete_1d"
+  },
+  "github.com": {
+    "default": "delete"
+  },
+  "gitlab.com": {
+    "default": "delete"
+  },
+  "glassdoor.com": {
+    "default": "delete"
+  },
+  "gmail.com": {
+    "default": "delete"
+  },
+  "gmx.com": {
+    "default": "delete"
+  },
+  "godaddy.com": {
+    "delete": [
+      "Start selling with a free $499 POS device."
+    ]
+  },
+  "goldstar.com": {
+    "default": "delete"
+  },
+  "goodbuygear.com": {
+    "default": "delete_1d",
+    "keep": [
+      "Order"
+    ]
+  },
+  "google.com": {
+    "default": "delete",
+    "keep": [
+      "order"
+    ]
+  },
+  "govdelivery.com": {
+    "default": "delete"
+  },
+  "grafana.com": {
+    "default": "delete"
+  },
+  "grammarly.com": {
+    "default": "delete"
+  },
+  "grandsierraresort.com": {
+    "default": "delete"
+  },
+  "gravitywrite.com": {
+    "default": "delete"
+  },
+  "greentoe.com": {
+    "delete": [
+      "Your Greentoe Offer - Status Update",
+      "Your Greentoe Offer - New Counter Offer",
+      "Greentoe Offer Confirmation"
+    ]
+  },
+  "groupon.com": {
+    "default": "delete"
+  },
+  "guidde.co": {
+    "default": "delete"
+  },
+  "gumloopmail.com": {
+    "default": "delete"
+  },
+  "gurufocus.com": {
+    "default": "delete"
+  },
+  "gurusofdance.com": {
+    "default": "delete"
+  },
+  "hallcpallc.com": {
+    "default": "delete"
+  },
+  "handy.com": {
+    "default": "delete"
+  },
+  "hashicorp.com": {
+    "default": "delete"
+  },
+  "hayneedle.com": {
+    "default": "delete"
+  },
+  "hays.com": {
+    "default": "delete"
+  },
+  "hdfcbank.net": {
+    "keep": [
+      "Important! Please update your Passport with Bank",
+      "Your Renewal Fixed deposit advice"
+    ],
+    "default": "delete_10d",
+    "delete": [
+      "View: Account update for your HDFC Bank A/c",
+      "Account update for your",
+      "HDFC Bank Combined Email",
+      "FD booking for NRE",
+      "No Action Needed",
+      "View: Account update for your"
+    ],
+    "delete_10d": [
+      "Bank Combined Email Statement"
+    ]
+  },
+  "heygen.com": {
+    "default": "delete"
+  },
+  "hive.co": {
+    "default": "delete"
+  },
+  "hivebritecommunity.com": {
+    "default": "delete"
+  },
+  "homedepot.com": {
+    "default": "keep"
+  },
+  "homesnap.com": {
+    "default": "delete"
+  },
+  "hotpads.com": {
+    "default": "delete"
+  },
+  "hpsmart.com": {
+    "default": "keep"
+  },
+  "hsabank.com": {
+    "default": "delete"
+  },
+  "hulumail.com": {
+    "default": "delete"
+  },
+  "hyundaiauto.in": {
+    "default": "delete"
+  },
+  "icicibank.com": {
+    "keep": [
+      "Nominee updation for your ICICI Bank Account",
+      "ICICI Bank Statement from November 01, 2025 to Nov",
+      "Form 16A (TDS certificate) for the period July 1 t"
+    ],
+    "delete_1d": [
+      "Transaction alert for your",
+      "GST Invoice For the Month",
+      "ICICI Bank Statement"
+    ]
+  },
+  "iciciprulife.com": {
+    "default": "delete"
+  },
+  "icicisecurities.com": {
+    "default": "delete"
+  },
+  "iheart.com": {
+    "default": "delete"
+  },
+  "imagekit.io": {
+    "default": "delete"
+  },
+  "indeed.com": {
+    "default": "delete"
+  },
+  "indiatimes-mail.com": {
+    "default": "delete"
+  },
+  "indiatimes.com": {
+    "default": "delete"
+  },
+  "influitive.com": {
+    "default": "delete"
+  },
+  "insidermonkey.com": {
+    "default": "delete"
+  },
+  "instacart.com": {
+    "default": "keep"
+  },
+  "instagram.com": {
+    "default": "delete"
+  },
+  "interactivebrokers-email.com": {
+    "delete": [
+      "Newsletter"
+    ]
+  },
+  "interactivebrokers.com": {
+    "default": "delete"
+  },
+  "intermiles.com": {
+    "default": "delete"
+  },
+  "intuit.com": {
+    "default": "keep",
+    "subdomains": {
+      "em1.turbotax.intuit.com": {
+        "default": "delete"
+      }
+    }
+  },
+  "investorshub.com": {
+    "default": "delete"
+  },
+  "invideo.io": {
+    "delete": [
+      "Your AI Avatar for free, Create now!"
+    ]
+  },
+  "ionos.com": {
+    "default": "delete"
+  },
+  "iracing.com": {
+    "default": "delete"
+  },
+  "itp.net": {
+    "default": "delete"
+  },
+  "itprotoday.com": {
+    "default": "delete"
+  },
+  "itunes.com": {
+    "default": "delete"
+  },
+  "jobscan.co": {
+    "default": "delete"
+  },
+  "keymate.ai": {
+    "default": "delete"
+  },
+  "kfintech.com": {
+    "default": "delete"
+  },
+  "kimblegroup.com": {
+    "default": "delete"
+  },
+  "kodekloud.com": {
+    "default": "delete"
+  },
+  "kw.com": {
+    "default": "delete"
+  },
+  "lancom.de": {
+    "default": "delete_1d"
+  },
+  "lastpass.com": {
+    "default": "keep"
+  },
+  "lensa.com": {
+    "default": "delete"
+  },
+  "leonardo.ai": {
+    "default": "delete"
+  },
+  "levi.com": {
+    "default": "delete"
+  },
+  "lge.com": {
+    "default": "delete"
+  },
+  "lindy.ai": {
+    "delete": [
+      "What’s new in Lindy: Autosave and drafts, Gemini 2"
+    ]
+  },
+  "linkedin.com": {
+    "default": "delete"
+  },
+  "livingsocial.com": {
+    "default": "delete"
+  },
+  "lorventech.com": {
+    "default": "delete_1d"
+  },
+  "lowes.com": {
+    "default": "delete"
+  },
+  "lyftmail.com": {
+    "default": "delete"
+  },
+  "magicbricks.com": {
+    "default": "delete"
+  },
+  "magwc.com": {
+    "default": "delete"
+  },
+  "mailchimpapp.net": {
+    "default": "delete"
+  },
+  "matterport.com": {
+    "default": "delete"
+  },
+  "maxfashion.in": {
+    "default": "delete"
+  },
+  "medallia.com": {
+    "default": "delete"
+  },
+  "medium.com": {
+    "default": "delete"
+  },
+  "meetgeek.ai": {
+    "default": "delete"
+  },
+  "meetup.com": {
+    "default": "delete"
+  },
+  "meta.com": {
+    "default": "keep"
+  },
+  "microsoft.com": {
+    "default": "delete"
+  },
+  "milesformigraine.org": {
+    "default": "delete"
+  },
+  "miltongranger.com": {
+    "default": "delete"
+  },
+  "mint.com": {
+    "default": "delete"
+  },
+  "modal.com": {
+    "default": "delete"
+  },
+  "moen.com": {
+    "default": "delete"
+  },
+  "moneycontrol.com": {
+    "default": "delete"
+  },
+  "mongodb.com": {
+    "default": "delete"
+  },
+  "monterra.org": {
+    "default": "delete"
+  },
+  "morganstanley.com": {
+    "default": "delete"
+  },
+  "morningsave.com": {
+    "default": "delete"
+  },
+  "morningstar.com": {
+    "default": "delete"
+  },
+  "moviepass.com": {
+    "default": "delete"
+  },
+  "mpug.com": {
+    "default": "delete"
+  },
+  "mufg.com": {
+    "default": "delete"
+  },
+  "muzata.com": {
+    "default": "delete"
+  },
+  "mycslink.org": {
+    "default": "keep"
+  },
+  "mygoodtape.com": {
+    "default": "delete"
+  },
+  "nabshow.com": {
+    "default": "delete"
+  },
+  "namecheap.com": {
+    "default": "delete"
+  },
+  "nanalyze.com": {
+    "default": "delete_1d"
+  },
+  "narvar.com": {
+    "default": "delete_1d"
+  },
+  "neon.tech": {
+    "default": "delete"
+  },
+  "netflix.com": {
+    "default": "delete"
+  },
+  "netvisionresources.com": {
+    "default": "delete"
+  },
+  "newegg.com": {
+    "default": "delete"
+  },
+  "newrez-shellpoint.com": {
+    "delete_1d": [
+      "Password Changed"
+    ]
+  },
+  "newrez.com": {
+    "default": "keep"
+  },
+  "newrezpartners.com": {
+    "default": "keep"
+  },
+  "newrezservicing.com": {
+    "delete": [
+      "Your recurring payment"
+    ],
+    "subdomains": {
+      "notify.newrezservicing.com": {
+        "delete_1d": [
+          "Your billing statement"
+        ]
+      }
+    },
+    "default": "delete_10d"
+  },
+  "newyorktimes.com": {
+    "default": "delete"
+  },
+  "nextdoor.com": {
+    "default": "delete"
+  },
+  "nfl.com": {
+    "default": "delete"
+  },
+  "nike.com": {
+    "default": "delete"
+  },
+  "nobroker.in": {
+    "default": "delete"
+  },
+  "notification-naviextras.com": {
+    "default": "delete"
+  },
+  "notifications-economictimes.com": {
+    "default": "delete"
+  },
+  "nsdl.co.in": {
+    "default": "delete"
+  },
+  "nsdl.com": {
+    "default": "delete"
+  },
+  "nse.co.in": {
+    "default": "delete"
+  },
+  "nvidia.com": {
+    "default": "delete"
+  },
+  "nyandcompany.com": {
+    "default": "delete"
+  },
+  "nytimes.com": {
+    "default": "delete"
+  },
+  "oaklandzoo.org": {
+    "default": "delete"
+  },
+  "observablehq.com": {
+    "default": "delete_1d"
+  },
+  "onedrive.com": {
+    "default": "delete"
+  },
+  "onpointwarranty.com": {
+    "default": "delete_1d"
+  },
+  "openai.com": {
+    "default": "delete"
+  },
+  "opower.com": {
+    "default": "delete"
+  },
+  "parts-stocked.com": {
+    "default": "delete"
+  },
+  "payback.in": {
+    "default": "delete"
+  },
+  "paypal.com": {
+    "default": "delete"
+  },
+  "pdffiller.com": {
+    "default": "delete_1d"
+  },
+  "peacocktv.com": {
+    "default": "delete"
+  },
+  "perfume.com": {
+    "default": "delete"
+  },
+  "pge.com": {
+    "default": "delete",
+    "keep": [
+      "Payment"
+    ]
+  },
+  "phillip@rate.com": {
+    "default": "delete"
+  },
+  "phontabulous.com": {
+    "default": "delete_1d"
+  },
+  "pnc.com": {
+    "default": "delete"
+  },
+  "portainer.io": {
+    "default": "delete"
+  },
+  "primusglobal.com": {
+    "default": "delete"
+  },
+  "propertyware.com": {
+    "default": "delete"
+  },
+  "prpsjeans.com": {
+    "default": "delete"
+  },
+  "pyquantnews.com": {
+    "default": "delete_1d"
+  },
+  "questdiagnostics.com": {
+    "default": "delete"
+  },
+  "quora.com": {
+    "default": "delete"
+  },
+  "qvcemail.com": {
+    "default": "keep"
+  },
+  "rate.com": {
+    "default": "delete"
+  },
+  "realscout.com": {
+    "default": "delete"
+  },
+  "realtor.com": {
+    "default": "delete"
+  },
+  "redditmail.com": {
+    "default": "delete"
+  },
+  "redfin.com": {
+    "default": "delete"
+  },
+  "reelgood.com": {
+    "default": "delete"
+  },
+  "releasemyad.com": {
+    "default": "delete"
+  },
+  "remitly.com": {
+    "default": "delete"
+  },
+  "resolve.io": {
+    "default": "delete"
+  },
+  "resumeworded.com": {
+    "default": "delete_1d"
+  },
+  "reventure.app": {
+    "default": "delete"
+  },
+  "rh.com": {
+    "default": "delete"
+  },
+  "ring.com": {
+    "default": "delete"
+  },
+  "roboform.com": {
+    "delete": [
+      "Your RoboForm subscription expires soon"
+    ]
+  },
+  "samsung-mail.com": {
+    "default": "delete_1d"
+  },
+  "samsungcloud.com": {
+    "default": "delete"
+  },
+  "sandisk.com": {
+    "default": "keep"
+  },
+  "sbcglobal.net": {
+    "default": "delete"
+  },
+  "sbi.co.in": {
+    "keep": [
+      "E-account statement for your SBI account(s)."
+    ],
+    "subdomains": {
+      "alerts.sbi.co.in": {
+        "default": "keep"
+      },
+      "communications.sbi.co.in": {
+        "default": "delete"
+      }
+    }
+  },
+  "sceg.com": {
+    "default": "keep"
+  },
+  "schwab.com": {
+    "default": "delete_1d",
+    "keep": [
+      "statement"
+    ]
+  },
+  "seekingalpha.com": {
+    "default": "delete"
+  },
+  "selecthomewarranty.com": {
+    "default": "delete_1d"
+  },
+  "selina.com": {
+    "default": "delete"
+  },
+  "setindia.com": {
+    "delete_1d": [
+      "OTP for Registration"
+    ]
+  },
+  "sevenrooms.com": {
+    "default": "delete"
+  },
+  "sfciti.org": {
+    "default": "delete"
+  },
+  "shef.com": {
+    "default": "delete_1d",
+    "keep": [
+      "Order"
+    ]
+  },
+  "sheinnotice.com": {
+    "default": "keep"
+  },
+  "shelly.cloud": {
+    "default": "delete"
+  },
+  "shift.com": {
+    "default": "delete"
+  },
+  "shoott.com": {
+    "default": "delete_1d"
+  },
+  "shopifyemail.com": {
+    "default": "keep"
+  },
+  "shopmoment.com": {
+    "default": "delete"
+  },
+  "shopperapproved.com": {
+    "delete": [
+      "Rate Your",
+      "Review Requested",
+      "Please review"
+    ]
+  },
+  "shoppersstop.com": {
+    "default": "delete"
+  },
+  "shutterfly.com": {
+    "default": "delete"
+  },
+  "simplywall.st": {
+    "default": "delete"
+  },
+  "skyscanner.com": {
+    "default": "delete"
+  },
+  "slack.com": {
+    "delete": [
+      "Slack’s free plan will now include additional secu",
+      "Reminder: Content older than one year will be dele"
+    ]
+  },
+  "slingemail.com": {
+    "default": "delete_1d"
+  },
+  "smartrecruiters.com": {
+    "default": "delete"
+  },
+  "smcu.org": {
+    "default": "delete"
+  },
+  "sqlmaestros.com": {
+    "default": "delete"
+  },
+  "sqlservercentral.com": {
+    "default": "delete"
+  },
+  "sqlskills.com": {
+    "default": "delete"
+  },
+  "squareup.com": {
+    "default": "delete"
+  },
+  "starz.com": {
+    "delete": [
+      "Your Discount Has Been Applied/Updates to the Term"
+    ]
+  },
+  "stocktwits.com": {
+    "default": "delete"
+  },
+  "stockunlock.com": {
+    "default": "delete_1d"
+  },
+  "streamsets.com": {
+    "default": "delete"
+  },
+  "stripe.com": {
+    "default": "keep"
+  },
+  "subway.com": {
+    "default": "delete_1d"
+  },
+  "sutterhealth.org": {
+    "default": "keep"
+  },
+  "swiggy.in": {
+    "default": "delete"
+  },
+  "tailscale.com": {
+    "default": "delete"
+  },
+  "target.com": {
+    "default": "delete"
+  },
+  "taskrabbit.com": {
+    "default": "delete_10d"
+  },
+  "tdameritrade.com": {
+    "default": "delete"
+  },
+  "temuemail.com": {
+    "default": "delete"
+  },
+  "tesla.com": {
+    "default": "delete"
+  },
+  "thecapsource.com": {
+    "default": "delete"
+  },
+  "thekrazycouponlady.com": {
+    "default": "delete"
+  },
+  "themoviedb.org": {
+    "default": "keep"
+  },
+  "thepixelconnection.com": {
+    "default": "delete"
+  },
+  "therealestatecpa.com": {
+    "default": "delete"
+  },
+  "thumbtack.com": {
+    "default": "delete_1d"
+  },
+  "tigerdirect.com": {
+    "default": "delete"
+  },
+  "tikr.com": {
+    "default": "delete"
+  },
+  "timeoutdubai.com": {
+    "default": "delete"
+  },
+  "tipranks.com": {
+    "default": "delete"
+  },
+  "topcashback.com": {
+    "default": "delete",
+    "keep": [
+      "Transaction"
+    ]
+  },
+  "tp-link.com": {
+    "delete_1d": [
+      "We Noticed a New Login"
+    ]
+  },
+  "travelzoo.com": {
+    "default": "delete_1d"
+  },
+  "tripadvisor.com": {
+    "default": "delete"
+  },
+  "tripit.com": {
+    "default": "delete"
+  },
+  "trustage.com": {
+    "default": "delete"
+  },
+  "trustpilotmail.com": {
+    "default": "delete_1d"
+  },
+  "turbotenant.com": {
+    "default": "delete"
+  },
+  "uber.com": {
+    "default": "delete"
+  },
+  "ucsf.edu": {
+    "delete": [
+      "UBL December 2025",
+      "UBL November 2025",
+      "UBL October 2025",
+      "UBL September 2025",
+      "UBL August 2025",
+      "UBL July 2025"
+    ]
+  },
+  "united.com": {
+    "default": "delete"
+  },
+  "ups.com": {
+    "default": "delete"
+  },
+  "usbank.com": {
+    "default": "delete"
+  },
+  "usgrpinc.com": {
+    "default": "delete"
+  },
+  "usps.com": {
+    "default": "delete"
+  },
+  "ussquash.com": {
+    "default": "delete"
+  },
+  "vagaro.com": {
+    "default": "delete"
+  },
+  "vanguard.com": {
+    "default": "keep"
+  },
+  "vasion.com": {
+    "default": "delete_1d"
+  },
+  "venmo.com": {
+    "delete": [
+      "Speed up your study or work routine with a free ye",
+      "What's new on Venmo?",
+      "Coming soon, you can"
+    ],
+    "subdomains": {
+      "email.venmo.com": {
+        "delete": [
+          "Preeti dua, discover",
+          "Psst: See what",
+          "Here's how"
+        ]
+      }
+    }
+  },
+  "veritosolutionsinc.com": {
+    "default": "delete"
+  },
+  "viator.com": {
+    "default": "delete"
+  },
+  "vidiq.com": {
+    "default": "delete"
+  },
+  "vidyo.ai": {
+    "default": "delete"
+  },
+  "vynedental.com": {
+    "default": "keep"
+  },
+  "walgreens.com": {
+    "default": "delete"
+  },
+  "wavebroadband.com": {
+    "default": "delete"
+  },
+  "webdevsimplified.com": {
+    "default": "delete_1d"
+  },
+  "wellsfargo.com": {
+    "default": "delete"
+  },
+  "wellsfargoemail.com": {
+    "default": "delete"
+  },
+  "willow.tv": {
+    "default": "delete_1d"
+  },
+  "wondertechlabs.com": {
+    "default": "delete"
+  },
+  "x.com": {
+    "default": "delete"
+  },
+  "xfinity.com": {
+    "default": "delete"
+  },
+  "yelp.com": {
+    "default": "delete"
+  },
+  "yotpo.com": {
+    "delete": [
+      "Loved it? Share & enjoy 20% off your next order",
+      "Don't forget to write a review and get 20% off"
+    ]
+  },
+  "yourasianconnection.com": {
+    "default": "delete"
+  },
+  "youtube.com": {
+    "default": "delete_1d"
+  },
+  "zen-makemytrip.com": {
+    "default": "delete"
+  },
+  "zerorezcolumbia.com": {
+    "default": "delete"
+  },
+  "zillow.com": {
+    "default": "delete"
+  },
+  "zillowrentals.com": {
+    "delete": [
+      "Rental market update for 136 H"
+    ]
+  },
+  "ziprecruiter.com": {
+    "default": "delete"
+  },
+  "zlk.com": {
+    "default": "keep"
+  },
+  "zocdoc.com": {
+    "default": "delete"
+  },
+  "zohobookings.com": {
+    "default": "keep"
+  },
+  "zomato.com": {
+    "default": "delete"
+  },
+  "zyngamail.com": {
+    "default": "delete"
+  }
+}

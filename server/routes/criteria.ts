@@ -6,14 +6,16 @@
 
 import { Router, Request, Response } from 'express';
 import {
-  loadUnifiedCriteria,
+  loadUnifiedCriteriaAsync,
   saveUnifiedCriteria,
   addRule,
   removeRule,
   addExcludeSubjects,
-  getDomainCriteria,
-  getCriteriaStats,
+  getDomainCriteriaAsync,
+  getCriteriaStatsAsync,
   invalidateCache,
+  updateDomainRulesAsync,
+  deleteDomainAsync,
   type Action,
   type DomainRules,
   type UnifiedCriteria
@@ -25,10 +27,10 @@ const router = Router();
  * GET /api/criteria
  * Get the entire unified criteria file.
  */
-router.get('/', (_req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   try {
-    const criteria = loadUnifiedCriteria();
-    const stats = getCriteriaStats();
+    const criteria = await loadUnifiedCriteriaAsync();
+    const stats = await getCriteriaStatsAsync();
 
     res.json({
       success: true,
@@ -48,9 +50,9 @@ router.get('/', (_req: Request, res: Response) => {
  * GET /api/criteria/stats
  * Get statistics about the criteria.
  */
-router.get('/stats', (_req: Request, res: Response) => {
+router.get('/stats', async (_req: Request, res: Response) => {
   try {
-    const stats = getCriteriaStats();
+    const stats = await getCriteriaStatsAsync();
     res.json({ success: true, stats });
   } catch (error) {
     console.error('Error getting stats:', error);
@@ -65,10 +67,10 @@ router.get('/stats', (_req: Request, res: Response) => {
  * GET /api/criteria/domain/:domain
  * Get criteria for a specific domain.
  */
-router.get('/domain/:domain', (req: Request, res: Response) => {
+router.get('/domain/:domain', async (req: Request, res: Response) => {
   try {
     const domain = req.params.domain;
-    const rules = getDomainCriteria(domain);
+    const rules = await getDomainCriteriaAsync(domain);
 
     if (!rules) {
       res.status(404).json({
@@ -208,14 +210,12 @@ router.delete('/rule', (req: Request, res: Response) => {
  *
  * Body: DomainRules object
  */
-router.put('/domain/:domain', (req: Request, res: Response) => {
+router.put('/domain/:domain', async (req: Request, res: Response) => {
   try {
     const domain = req.params.domain.toLowerCase();
     const rules = req.body as DomainRules;
 
-    const criteria = loadUnifiedCriteria();
-    criteria[domain] = rules;
-    saveUnifiedCriteria(criteria);
+    await updateDomainRulesAsync(domain, rules);
 
     console.log(`Updated rules for ${domain}`);
 
@@ -238,22 +238,19 @@ router.put('/domain/:domain', (req: Request, res: Response) => {
  * DELETE /api/criteria/domain/:domain
  * Remove all rules for a domain.
  */
-router.delete('/domain/:domain', (req: Request, res: Response) => {
+router.delete('/domain/:domain', async (req: Request, res: Response) => {
   try {
     const domain = req.params.domain.toLowerCase();
 
-    const criteria = loadUnifiedCriteria();
+    const deleted = await deleteDomainAsync(domain);
 
-    if (!criteria[domain]) {
+    if (!deleted) {
       res.status(404).json({
         success: false,
         error: 'Domain not found'
       });
       return;
     }
-
-    delete criteria[domain];
-    saveUnifiedCriteria(criteria);
 
     console.log(`Removed all rules for ${domain}`);
 
@@ -334,7 +331,7 @@ router.post('/refresh', (_req: Request, res: Response) => {
  * GET /api/criteria/search
  * Search for domains matching a pattern.
  */
-router.get('/search', (req: Request, res: Response) => {
+router.get('/search', async (req: Request, res: Response) => {
   try {
     const query = (req.query.q as string || '').toLowerCase();
 
@@ -346,7 +343,7 @@ router.get('/search', (req: Request, res: Response) => {
       return;
     }
 
-    const criteria = loadUnifiedCriteria();
+    const criteria = await loadUnifiedCriteriaAsync();
     const matches: { domain: string; rules: DomainRules }[] = [];
 
     for (const [domain, rules] of Object.entries(criteria)) {

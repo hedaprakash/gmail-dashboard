@@ -24,5 +24,5 @@ export const dbConfig: sql.config = {
   },
 };
 
-// Feature flag to toggle between SQL and JSON
-export const USE_SQL_DATABASE = process.env.USE_SQL_DATABASE === 'true';
+// Feature flag to toggle between SQL and JSON (defaults to true)
+export const USE_SQL_DATABASE = process.env.USE_SQL_DATABASE !== 'false';

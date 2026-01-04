@@ -292,6 +292,9 @@ router.post('/evaluate', async (_req: Request, res: Response) => {
   try {
     console.log('Re-evaluating pending emails...');
 
+    // Reset all actions to NULL so they get re-evaluated
+    await query('UPDATE pending_emails SET Action = NULL, MatchedRule = NULL');
+
     // Call the stored procedure to evaluate pending emails
     await query('EXEC dbo.EvaluatePendingEmails');
 
