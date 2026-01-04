@@ -361,3 +361,9 @@ npx kill-port 3000 5000 && npm run dev
 - **NEVER** run `git reset --hard`, `git clean -fd`, `git checkout .`, or any command that discards uncommitted work without **explicit user permission**
 - **ALWAYS** ask before running any command that could delete or overwrite uncommitted changes
 - When fixing issues (like line endings), explain the solution first and ask for approval before executing
+
+### 6. Explain Plan Before Writing Code
+- **ALWAYS** explain what you plan to do BEFORE writing or modifying code
+- Describe the changes you'll make and which files will be affected
+- Wait for user acknowledgment before implementing
+- Format: "Here's my plan: [explanation]. Should I proceed?"
