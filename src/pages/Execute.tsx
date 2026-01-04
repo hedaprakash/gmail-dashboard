@@ -98,6 +98,12 @@ export default function Execute() {
   const [actionType, setActionType] = useState<ActionType>('delete');
   const [dryRun, setDryRun] = useState(true);
   const [minAgeDays, setMinAgeDays] = useState(0);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 5000);
+  };
 
   // Fetch summary on load
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useQuery({
@@ -111,17 +117,31 @@ export default function Execute() {
 
   const executeMutation = useMutation({
     mutationFn: () => executeDelete(actionType, dryRun, minAgeDays),
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Refresh summary after execution
       refetchSummary();
+      if (data.dryRun) {
+        showNotification('success', `Dry run complete: ${data.summary.deleted} emails would be deleted`);
+      } else if (data.summary.errors > 0) {
+        showNotification('error', `Deleted ${data.summary.deleted} emails, ${data.summary.errors} errors`);
+      } else {
+        showNotification('success', `Successfully deleted ${data.summary.deleted} emails`);
+      }
+    },
+    onError: (error) => {
+      showNotification('error', `Execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 
   const evaluateMutation = useMutation({
     mutationFn: reEvaluate,
-    onSuccess: () => {
+    onSuccess: (data) => {
       refetchSummary();
       queryClient.invalidateQueries({ queryKey: ['emails'] });
+      showNotification('success', `Re-evaluation complete: ${data.message}`);
+    },
+    onError: (error) => {
+      showNotification('error', `Re-evaluation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 
@@ -129,15 +149,44 @@ export default function Execute() {
   const selectedCount = summary?.byAction.find(a => a.action === actionType)?.count || 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Execute Email Deletion</h1>
+    <>
+      {/* Notification Toast */}
+      {notification && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 ${
+          notification.type === 'success'
+            ? 'bg-green-100 text-green-800 border border-green-200'
+            : 'bg-red-100 text-red-800 border border-red-200'
+        }`}>
+          {notification.type === 'success' ? '✓' : '✕'}
+          {notification.message}
+          <button
+            onClick={() => setNotification(null)}
+            className="ml-2 text-gray-500 hover:text-gray-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-800">Execute Email Deletion</h1>
         <button
           onClick={() => evaluateMutation.mutate()}
           disabled={evaluateMutation.isPending}
-          className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 text-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 text-sm"
         >
-          {evaluateMutation.isPending ? 'Re-evaluating...' : 'Re-evaluate Emails'}
+          {evaluateMutation.isPending ? (
+            <>
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Re-evaluating...
+            </>
+          ) : (
+            'Re-evaluate Emails'
+          )}
         </button>
       </div>
 
@@ -275,15 +324,23 @@ export default function Execute() {
             executeMutation.mutate();
           }}
           disabled={executeMutation.isPending || selectedCount === 0}
-          className={`px-4 py-2 rounded-lg text-white disabled:opacity-50 ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white disabled:opacity-50 ${
             dryRun ? 'bg-orange-500 hover:bg-orange-600' : 'bg-red-500 hover:bg-red-600'
           }`}
         >
-          {executeMutation.isPending
-            ? 'Executing...'
-            : dryRun
-            ? `Execute Dry Run (${selectedCount})`
-            : `Execute Delete (${selectedCount})`}
+          {executeMutation.isPending ? (
+            <>
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Deleting... (this may take a while)
+            </>
+          ) : dryRun ? (
+            `Execute Dry Run (${selectedCount})`
+          ) : (
+            `Execute Delete (${selectedCount})`
+          )}
         </button>
       </div>
 
@@ -393,6 +450,7 @@ export default function Execute() {
           <li>Click "Re-evaluate Emails" after changing criteria to update actions</li>
         </ol>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
