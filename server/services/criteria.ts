@@ -209,7 +209,62 @@ async function getOrCreateCriteria(
 }
 
 /**
+ * Result from ModifyCriteria stored procedure
+ */
+interface ModifyCriteriaResult {
+  Success: number;
+  Message: string;
+  RecordId: number | null;
+  AuditId: number | null;
+}
+
+/**
+ * Call the ModifyCriteria stored procedure.
+ * This is the unified way to modify criteria.
+ */
+async function callModifyCriteria(
+  operation: 'ADD' | 'REMOVE' | 'UPDATE' | 'CLEAR',
+  dimension: 'domain' | 'subdomain' | 'email' | 'subject' | 'from_email' | 'to_email',
+  userEmail: string,
+  keyValue?: string,
+  action?: Action,
+  parentDomain?: string,
+  parentSubdomain?: string,
+  oldAction?: Action
+): Promise<{ success: boolean; message: string; recordId: number | null }> {
+  const result = await query<ModifyCriteriaResult>(
+    `EXEC dbo.ModifyCriteria
+      @Operation = @operation,
+      @Dimension = @dimension,
+      @Action = @action,
+      @KeyValue = @keyValue,
+      @UserEmail = @userEmail,
+      @ParentDomain = @parentDomain,
+      @ParentSubdomain = @parentSubdomain,
+      @OldAction = @oldAction`,
+    {
+      operation,
+      dimension,
+      action: action || null,
+      keyValue: keyValue?.toLowerCase() || null,
+      userEmail,
+      parentDomain: parentDomain?.toLowerCase() || null,
+      parentSubdomain: parentSubdomain?.toLowerCase() || null,
+      oldAction: oldAction || null
+    }
+  );
+
+  const row = result.recordset[0];
+  return {
+    success: row?.Success === 1,
+    message: row?.Message || 'No response',
+    recordId: row?.RecordId || null
+  };
+}
+
+/**
  * Add a rule to SQL database for a specific user.
+ * Uses the ModifyCriteria stored procedure.
  */
 async function addRuleToSQL(
   domain: string,
@@ -219,52 +274,32 @@ async function addRuleToSQL(
   subdomain?: string
 ): Promise<void> {
   const domainLower = domain.toLowerCase();
-  let criteriaId: number;
-
-  if (subdomain) {
-    // Ensure parent domain exists
-    const parentId = await getOrCreateCriteria(domainLower, 'domain', userEmail);
-    criteriaId = await getOrCreateCriteria(subdomain.toLowerCase(), 'subdomain', userEmail, parentId);
-  } else {
-    // Determine if this is an email or domain
-    const keyType = domainLower.includes('@') ? 'email' : 'domain';
-    criteriaId = await getOrCreateCriteria(domainLower, keyType, userEmail);
-  }
 
   if (subjectPattern) {
-    // Check if pattern already exists
-    const existing = await queryOne<PatternRow>(
-      `SELECT id FROM patterns
-       WHERE criteria_id = @criteriaId AND action = @action AND LOWER(pattern) = LOWER(@pattern)`,
-      { criteriaId, action, pattern: subjectPattern }
-    );
-
-    if (!existing) {
-      const patternId = await insert('patterns', {
-        criteria_id: criteriaId,
-        action,
-        pattern: subjectPattern,
-      });
-
-      // Audit log: pattern inserted
-      await logAudit(userEmail, 'INSERT', 'patterns', patternId, domainLower, {
-        action,
-        pattern: subjectPattern,
-        criteria_id: criteriaId
-      });
-    }
-  } else {
-    // Set default action
-    await query(
-      `UPDATE criteria SET default_action = @action WHERE id = @criteriaId`,
-      { criteriaId, action }
-    );
-
-    // Audit log: default action updated
-    await logAudit(userEmail, 'UPDATE', 'criteria', criteriaId, domainLower, {
+    // Add subject pattern
+    await callModifyCriteria(
+      'ADD',
+      'subject',
+      userEmail,
+      subjectPattern,
       action,
-      field: 'default_action'
-    });
+      domainLower,
+      subdomain?.toLowerCase()
+    );
+  } else if (subdomain) {
+    // Add subdomain default action
+    await callModifyCriteria(
+      'ADD',
+      'subdomain',
+      userEmail,
+      subdomain.toLowerCase(),
+      action,
+      domainLower
+    );
+  } else {
+    // Determine if this is an email or domain
+    const dimension = domainLower.includes('@') ? 'email' : 'domain';
+    await callModifyCriteria('ADD', dimension, userEmail, domainLower, action);
   }
 
   // Invalidate cache
@@ -273,6 +308,7 @@ async function addRuleToSQL(
 
 /**
  * Remove a rule from SQL database for a specific user.
+ * Uses the ModifyCriteria stored procedure.
  */
 async function removeRuleFromSQL(
   domain: string,
@@ -283,67 +319,38 @@ async function removeRuleFromSQL(
 ): Promise<boolean> {
   const domainLower = domain.toLowerCase();
 
-  // Find the criteria entry for this user
-  let keyValue = subdomain ? subdomain.toLowerCase() : domainLower;
-  const existing = await queryOne<CriteriaRow>(
-    `SELECT id FROM criteria WHERE key_value = @keyValue AND user_email = @userEmail`,
-    { keyValue, userEmail }
-  );
-
-  if (!existing) {
-    return false;
-  }
-
-  let removed = false;
-
-  if (subjectPattern && action) {
+  if (subjectPattern) {
     // Remove specific pattern
-    const result = await remove(
-      'patterns',
-      'criteria_id = @criteriaId AND action = @action AND LOWER(pattern) = LOWER(@pattern)',
-      { criteriaId: existing.id, action, pattern: subjectPattern }
-    );
-    removed = result > 0;
-
-    if (removed) {
-      await logAudit(userEmail, 'DELETE', 'patterns', existing.id, domainLower, {
-        action,
-        pattern: subjectPattern,
-        criteria_id: existing.id
-      });
-    }
-  } else if (action) {
-    // Remove all patterns for action and clear default if matches
-    await remove('patterns', 'criteria_id = @criteriaId AND action = @action', {
-      criteriaId: existing.id,
+    const result = await callModifyCriteria(
+      'REMOVE',
+      'subject',
+      userEmail,
+      subjectPattern,
       action,
-    });
-    await query(
-      `UPDATE criteria SET default_action = NULL, updated_at = GETDATE()
-       WHERE id = @criteriaId AND default_action = @action`,
-      { criteriaId: existing.id, action }
+      domainLower,
+      subdomain?.toLowerCase()
     );
-    removed = true;
-
-    await logAudit(userEmail, 'DELETE', 'patterns', existing.id, domainLower, {
-      action,
-      type: 'all_patterns_for_action',
-      criteria_id: existing.id
-    });
+    criteriaCache = null;
+    return result.success;
+  } else if (subdomain) {
+    // Remove subdomain
+    const result = await callModifyCriteria(
+      'REMOVE',
+      'subdomain',
+      userEmail,
+      subdomain.toLowerCase(),
+      undefined,
+      domainLower
+    );
+    criteriaCache = null;
+    return result.success;
   } else {
-    // Remove entire criteria entry
-    await query(`DELETE FROM criteria WHERE id = @id`, { id: existing.id });
-    removed = true;
-
-    await logAudit(userEmail, 'DELETE', 'criteria', existing.id, domainLower, {
-      type: 'entire_criteria',
-      key_value: keyValue
-    });
+    // Remove entire domain
+    const dimension = domainLower.includes('@') ? 'email' : 'domain';
+    const result = await callModifyCriteria('REMOVE', dimension, userEmail, domainLower);
+    criteriaCache = null;
+    return result.success;
   }
-
-  // Invalidate cache
-  criteriaCache = null;
-  return removed;
 }
 
 /**

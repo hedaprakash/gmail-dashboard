@@ -465,6 +465,103 @@ export function useRemoveSubdomainRule() {
   });
 }
 
+// ============================================================================
+// UNIFIED MODIFY CRITERIA HOOK
+// Uses the new /api/criteria/modify endpoint with stored procedure
+// ============================================================================
+
+export type CriteriaOperation = 'ADD' | 'REMOVE' | 'UPDATE' | 'CLEAR' | 'GET';
+export type CriteriaDimension = 'domain' | 'subdomain' | 'email' | 'subject' | 'from_email' | 'to_email';
+
+export interface ModifyCriteriaParams {
+  operation: CriteriaOperation;
+  dimension: CriteriaDimension;
+  action?: Action;
+  keyValue?: string;
+  parentDomain?: string;
+  parentSubdomain?: string;
+  oldAction?: Action;
+}
+
+export interface ModifyCriteriaResponse {
+  success: boolean;
+  message: string;
+  recordId?: number;
+  auditId?: number;
+  error?: string;
+}
+
+async function modifyCriteria(params: ModifyCriteriaParams): Promise<ModifyCriteriaResponse> {
+  const res = await fetch('/api/criteria/modify', {
+    ...fetchOptions,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to modify criteria');
+  }
+
+  return data;
+}
+
+/**
+ * Unified hook for all criteria modifications.
+ * Uses the new /api/criteria/modify endpoint which calls the ModifyCriteria stored procedure.
+ *
+ * @example
+ * // Add a domain delete rule
+ * modifyCriteria.mutate({
+ *   operation: 'ADD',
+ *   dimension: 'domain',
+ *   action: 'delete',
+ *   keyValue: 'spam.com'
+ * });
+ *
+ * @example
+ * // Add a subject pattern to a subdomain
+ * modifyCriteria.mutate({
+ *   operation: 'ADD',
+ *   dimension: 'subject',
+ *   action: 'keep',
+ *   keyValue: 'urgent',
+ *   parentDomain: 'example.com',
+ *   parentSubdomain: 'mail'
+ * });
+ *
+ * @example
+ * // Update a domain action
+ * modifyCriteria.mutate({
+ *   operation: 'UPDATE',
+ *   dimension: 'domain',
+ *   action: 'keep',
+ *   keyValue: 'important.com',
+ *   oldAction: 'delete'
+ * });
+ */
+export function useModifyCriteria() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: modifyCriteria,
+    onSuccess: (data, variables) => {
+      // Only invalidate queries if operation was successful and not a GET
+      if (data.success && variables.operation !== 'GET') {
+        queryClient.invalidateQueries({ queryKey: ['criteria'] });
+        queryClient.invalidateQueries({ queryKey: ['emails'] });
+        queryClient.invalidateQueries({ queryKey: ['stats'] });
+      }
+    }
+  });
+}
+
+// ============================================================================
+// LEGACY EXPORTS (for backwards compatibility)
+// ============================================================================
+
 // Legacy exports for backwards compatibility
 export type CriteriaEntry = {
   email: string;

@@ -329,6 +329,61 @@ docker-compose down && docker-compose up -d
 - API Health: http://localhost:5000/api/health
 ```
 
+### /test-criteria
+**Trigger phrases:** "test criteria", "run criteria tests", "run /test-criteria", "test the stored procedure", "test ModifyCriteria"
+
+**Action:** Execute all criteria modification test cases via the stored procedure without asking questions.
+
+**Prerequisites:**
+- SQL Server must be running (`docker-compose up -d`)
+- The stored procedures must be deployed
+
+**Workflow:**
+1. Connect to SQL Server database
+2. Execute the RunCriteriaTests stored procedure
+3. Capture and display results
+4. Report pass/fail status
+
+**Commands to run:**
+```bash
+# Run all tests with cleanup
+docker exec gmail-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "MyPass@word123" -C -d GmailCriteria \
+  -Q "EXEC dbo.RunCriteriaTests"
+
+# Run specific category
+docker exec gmail-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "MyPass@word123" -C -d GmailCriteria \
+  -Q "EXEC dbo.RunCriteriaTests @CategoryFilter = 'Domain'"
+```
+
+**Report format:**
+```
+## Criteria Modification Test Report
+
+### Summary
+- Total Tests: X
+- Passed: X ✅
+- Failed: X ❌
+- Errors: X
+
+### Failed Tests (if any)
+| ID | Description | Expected | Actual |
+|----|-------------|----------|--------|
+| XX | Description | expected | actual |
+
+### Execution Time: Xms
+```
+
+**Test Categories (50 tests total):**
+- Domain (D01-D10): Domain-level operations
+- Subdomain (S01-S10): Subdomain operations
+- Subdomain Review (SR01-SR06): Criteria manager subdomain ops
+- Email Pattern (E01-E10): fromEmail/toEmail rules
+- Subject Pattern (P01-P10): Subject pattern matching
+- Change (C01-C08): Update operations
+- Multi-User (U01-U05): User isolation tests
+
 ---
 
 ## Rules for Claude (MUST FOLLOW)
