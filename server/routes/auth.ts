@@ -1,7 +1,7 @@
 /**
  * Auth Routes
  *
- * Handles Google OAuth authentication.
+ * Handles Google OAuth authentication with multi-user session support.
  */
 
 import { Router, Request, Response } from 'express';
@@ -11,15 +11,27 @@ import {
   handleAuthCallback,
   clearAuth
 } from '../services/gmail.js';
+import { migrateUserData } from '../services/database.js';
 
 const router = Router();
 
 /**
  * GET /auth/status
- * Check if user is authenticated.
+ * Check if user is authenticated (via session or token).
  */
-router.get('/status', (_req: Request, res: Response) => {
+router.get('/status', (req: Request, res: Response) => {
   try {
+    // Check session first (multi-user mode)
+    if (req.session?.userEmail) {
+      res.json({
+        success: true,
+        authenticated: true,
+        email: req.session.userEmail
+      });
+      return;
+    }
+
+    // Fall back to token check (single-user backwards compat)
     const status = isAuthenticated();
     res.json({
       success: true,
@@ -55,11 +67,12 @@ router.get('/login', (_req: Request, res: Response) => {
 /**
  * GET /auth/callback
  * Handle OAuth callback from Google.
+ * Sets up session for multi-user support and migrates data if needed.
  */
 router.get('/callback', async (req: Request, res: Response) => {
   try {
     const code = req.query.code as string;
-    
+
     if (!code) {
       res.status(400).send(`
         <html>
@@ -74,9 +87,29 @@ router.get('/callback', async (req: Request, res: Response) => {
     }
 
     const result = await handleAuthCallback(code);
-    
-    if (result.success) {
-      // Redirect to frontend
+
+    if (result.success && result.email) {
+      // Set session for multi-user support
+      req.session.userEmail = result.email;
+
+      // Migrate default user data to this user if this is their first login
+      try {
+        await migrateUserData('default@user.com', result.email);
+        console.log(`Migrated data for user: ${result.email}`);
+      } catch (err) {
+        // Non-fatal: user might already have data or no default data exists
+        console.log(`Data migration skipped for ${result.email}:`, err);
+      }
+
+      // Save session before redirect
+      req.session.save((err) => {
+        if (err) {
+          console.error('Error saving session:', err);
+        }
+        res.redirect('http://localhost:3000/?authenticated=true');
+      });
+    } else if (result.success) {
+      // OAuth succeeded but no email - redirect anyway
       res.redirect('http://localhost:3000/?authenticated=true');
     } else {
       res.status(400).send(`
@@ -105,11 +138,20 @@ router.get('/callback', async (req: Request, res: Response) => {
 
 /**
  * POST /auth/logout
- * Clear authentication.
+ * Clear authentication and session.
  */
-router.post('/logout', (_req: Request, res: Response) => {
+router.post('/logout', (req: Request, res: Response) => {
   try {
+    // Clear session
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Error destroying session:', err);
+      }
+    });
+
+    // Clear OAuth token
     clearAuth();
+
     res.json({
       success: true,
       message: 'Logged out successfully'

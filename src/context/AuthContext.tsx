@@ -28,7 +28,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const checkAuthStatus = async () => {
     try {
       console.log('Checking auth status...');
-      const response = await fetch('/auth/status');
+      const response = await fetch('/auth/status', { credentials: 'include' });
       const data = await response.json();
       console.log('Auth status response:', data);
 
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = async () => {
     try {
-      await fetch('/auth/logout', { method: 'POST' });
+      await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
       setState({
         isAuthenticated: false,
         isLoading: false,

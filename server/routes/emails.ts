@@ -163,7 +163,7 @@ router.post('/refresh', async (_req: Request, res: Response) => {
     for (const email of emails) {
       // Truncate fields to fit column sizes
       const fromEmail = (email.from || '').slice(0, 255) || null;
-      const toEmail = (email.to || '').slice(0, 255) || null;
+      const toEmail = (email.toEmails || '').slice(0, 255) || null;
       const subject = (email.subject || '').slice(0, 500) || null;
 
       table.rows.add(

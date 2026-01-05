@@ -1,7 +1,8 @@
 /**
- * Action Routes - Unified Format
+ * Action Routes - Unified Format with Multi-User Support
  *
  * Handles Keep/Delete/Delete1d button actions using the unified criteria format.
+ * All actions are scoped to the authenticated user.
  */
 
 import { Router, Request, Response } from 'express';
@@ -11,9 +12,11 @@ import {
   addExcludeSubjects,
   markKeepAsync,
   getDomainCriteriaAsync,
+  addRuleAsync,
   type Action
 } from '../services/criteria.js';
 import { logKeep, logDelete, logDelete1d, logDelete10d, logUndo } from '../services/actionLogger.js';
+import { getUserEmail } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -24,6 +27,7 @@ const router = Router();
 router.post('/add-criteria', async (req: Request, res: Response) => {
   try {
     const { domain, subject_pattern, exclude_subject } = req.body;
+    const userEmail = getUserEmail(req);
 
     if (!domain) {
       res.status(400).json({
@@ -41,15 +45,15 @@ router.post('/add-criteria', async (req: Request, res: Response) => {
       }
     }
 
-    // Add the delete rule
-    addRule(domain, 'delete', subject_pattern || undefined);
+    // Add the delete rule (with user context)
+    await addRuleAsync(domain, 'delete', userEmail, subject_pattern || undefined);
 
     // Log the action
     logDelete(domain, subject_pattern || '');
 
-    console.log(`Added delete rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
+    console.log(`[${userEmail}] Added delete rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
 
-    const rules = await getDomainCriteriaAsync(domain);
+    const rules = await getDomainCriteriaAsync(domain, userEmail);
 
     res.json({
       success: true,
@@ -74,6 +78,7 @@ router.post('/add-criteria', async (req: Request, res: Response) => {
 router.post('/add-criteria-1d', async (req: Request, res: Response) => {
   try {
     const { domain, subject_pattern, exclude_subject } = req.body;
+    const userEmail = getUserEmail(req);
 
     if (!domain) {
       res.status(400).json({
@@ -91,15 +96,15 @@ router.post('/add-criteria-1d', async (req: Request, res: Response) => {
       }
     }
 
-    // Add the delete_1d rule
-    addRule(domain, 'delete_1d', subject_pattern || undefined);
+    // Add the delete_1d rule (with user context)
+    await addRuleAsync(domain, 'delete_1d', userEmail, subject_pattern || undefined);
 
     // Log the action
     logDelete1d(domain, subject_pattern || '');
 
-    console.log(`Added delete_1d rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
+    console.log(`[${userEmail}] Added delete_1d rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
 
-    const rules = await getDomainCriteriaAsync(domain);
+    const rules = await getDomainCriteriaAsync(domain, userEmail);
 
     res.json({
       success: true,
@@ -124,6 +129,7 @@ router.post('/add-criteria-1d', async (req: Request, res: Response) => {
 router.post('/add-criteria-10d', async (req: Request, res: Response) => {
   try {
     const { domain, subject_pattern, exclude_subject } = req.body;
+    const userEmail = getUserEmail(req);
 
     if (!domain) {
       res.status(400).json({
@@ -141,15 +147,15 @@ router.post('/add-criteria-10d', async (req: Request, res: Response) => {
       }
     }
 
-    // Add the delete_10d rule
-    addRule(domain, 'delete_10d', subject_pattern || undefined);
+    // Add the delete_10d rule (with user context)
+    await addRuleAsync(domain, 'delete_10d', userEmail, subject_pattern || undefined);
 
     // Log the action
     logDelete10d(domain, subject_pattern || '');
 
-    console.log(`Added delete_10d rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
+    console.log(`[${userEmail}] Added delete_10d rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
 
-    const rules = await getDomainCriteriaAsync(domain);
+    const rules = await getDomainCriteriaAsync(domain, userEmail);
 
     res.json({
       success: true,
@@ -174,6 +180,7 @@ router.post('/add-criteria-10d', async (req: Request, res: Response) => {
 router.post('/mark-keep', async (req: Request, res: Response) => {
   try {
     const { domain, subject_pattern, category } = req.body;
+    const userEmail = getUserEmail(req);
 
     if (!domain) {
       res.status(400).json({
@@ -183,13 +190,13 @@ router.post('/mark-keep', async (req: Request, res: Response) => {
       return;
     }
 
-    // Use SQL-aware markKeepAsync function
-    const { removedCount, rules } = await markKeepAsync(domain, subject_pattern || undefined);
+    // Use SQL-aware markKeepAsync function (with user context)
+    const { removedCount, rules } = await markKeepAsync(domain, userEmail, subject_pattern || undefined);
 
     // Log the action
     logKeep(domain, subject_pattern || '', category, removedCount);
 
-    console.log(`Marked keep: ${domain} (subject: ${subject_pattern || '(all)'}) - removed ${removedCount} delete rules`);
+    console.log(`[${userEmail}] Marked keep: ${domain} (subject: ${subject_pattern || '(all)'}) - removed ${removedCount} delete rules`);
 
     res.json({
       success: true,
@@ -222,6 +229,7 @@ router.post('/undo-last', (req: Request, res: Response) => {
       action?: Action;
       subject_pattern?: string;
     };
+    const userEmail = getUserEmail(req);
 
     if (!domain) {
       res.status(400).json({
@@ -231,7 +239,7 @@ router.post('/undo-last', (req: Request, res: Response) => {
       return;
     }
 
-    const removed = removeRule(domain, action, subject_pattern);
+    const removed = removeRule(domain, action, subject_pattern, undefined, userEmail);
 
     if (!removed) {
       res.status(404).json({
@@ -244,7 +252,7 @@ router.post('/undo-last', (req: Request, res: Response) => {
     // Log the undo action
     logUndo(domain, subject_pattern || '', action || 'unknown');
 
-    console.log(`Undid rule: ${domain} ${action || ''} ${subject_pattern || ''}`);
+    console.log(`[${userEmail}] Undid rule: ${domain} ${action || ''} ${subject_pattern || ''}`);
 
     res.json({
       success: true,
@@ -272,6 +280,7 @@ router.post('/set-default', async (req: Request, res: Response) => {
       domain: string;
       action: Action;
     };
+    const userEmail = getUserEmail(req);
 
     if (!domain) {
       res.status(400).json({
@@ -289,11 +298,11 @@ router.post('/set-default', async (req: Request, res: Response) => {
       return;
     }
 
-    addRule(domain, action);
+    await addRuleAsync(domain, action, userEmail);
 
-    console.log(`Set default ${action} for ${domain}`);
+    console.log(`[${userEmail}] Set default ${action} for ${domain}`);
 
-    const rules = await getDomainCriteriaAsync(domain);
+    const rules = await getDomainCriteriaAsync(domain, userEmail);
 
     res.json({
       success: true,
@@ -322,6 +331,7 @@ router.post('/add-pattern', async (req: Request, res: Response) => {
       action: Action;
       pattern: string;
     };
+    const userEmail = getUserEmail(req);
 
     if (!domain || !pattern) {
       res.status(400).json({
@@ -339,11 +349,11 @@ router.post('/add-pattern', async (req: Request, res: Response) => {
       return;
     }
 
-    addRule(domain, action, pattern);
+    await addRuleAsync(domain, action, userEmail, pattern);
 
-    console.log(`Added ${action} pattern for ${domain}: "${pattern}"`);
+    console.log(`[${userEmail}] Added ${action} pattern for ${domain}: "${pattern}"`);
 
-    const rules = await getDomainCriteriaAsync(domain);
+    const rules = await getDomainCriteriaAsync(domain, userEmail);
 
     res.json({
       success: true,

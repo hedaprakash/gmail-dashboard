@@ -125,20 +125,26 @@ export function flattenCriteria(criteria: UnifiedCriteria): FlattenedRule[] {
   return rules;
 }
 
+// Include credentials for session-based auth (multi-user support)
+const fetchOptions: RequestInit = {
+  credentials: 'include'
+};
+
 async function fetchAllCriteria(): Promise<CriteriaResponse> {
-  const res = await fetch('/api/criteria');
+  const res = await fetch('/api/criteria', fetchOptions);
   if (!res.ok) throw new Error('Failed to fetch criteria');
   return res.json();
 }
 
 async function fetchDomainCriteria(domain: string): Promise<DomainRulesResponse> {
-  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`);
+  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, fetchOptions);
   if (!res.ok) throw new Error('Failed to fetch domain criteria');
   return res.json();
 }
 
 async function addRule(domain: string, action: Action, subjectPattern?: string, subdomain?: string) {
   const res = await fetch('/api/criteria/rule', {
+    ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, action, subjectPattern, subdomain })
@@ -149,6 +155,7 @@ async function addRule(domain: string, action: Action, subjectPattern?: string, 
 
 async function deleteRule(domain: string, action?: Action, subjectPattern?: string, subdomain?: string) {
   const res = await fetch('/api/criteria/rule', {
+    ...fetchOptions,
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, action, subjectPattern, subdomain })
@@ -159,6 +166,7 @@ async function deleteRule(domain: string, action?: Action, subjectPattern?: stri
 
 async function deleteDomain(domain: string) {
   const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, {
+    ...fetchOptions,
     method: 'DELETE'
   });
   if (!res.ok) throw new Error('Failed to delete domain');
@@ -167,6 +175,7 @@ async function deleteDomain(domain: string) {
 
 async function updateDomainRules(domain: string, rules: DomainRules) {
   const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, {
+    ...fetchOptions,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(rules)
@@ -256,6 +265,7 @@ export function useUpdateDomain() {
 // Add exclude subjects to a domain
 async function addExcludeSubjects(domain: string, terms: string[]) {
   const res = await fetch('/api/criteria/exclude', {
+    ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, terms })
@@ -279,7 +289,7 @@ export function useAddExcludeSubjects() {
 // Remove exclude subject from a domain
 async function removeExcludeSubject(domain: string, term: string) {
   // Need to load current rules, remove the term, and save
-  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`);
+  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, fetchOptions);
   if (!res.ok) throw new Error('Failed to load domain');
   const data = await res.json();
 
@@ -292,6 +302,7 @@ async function removeExcludeSubject(domain: string, term: string) {
   }
 
   const updateRes = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, {
+    ...fetchOptions,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(rules)
@@ -314,7 +325,7 @@ export function useRemoveExcludeSubject() {
 
 // Set default action for a domain
 async function setDefaultAction(domain: string, action: Action | null) {
-  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`);
+  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, fetchOptions);
   let rules: DomainRules = {};
 
   if (res.ok) {
@@ -329,6 +340,7 @@ async function setDefaultAction(domain: string, action: Action | null) {
   }
 
   const updateRes = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, {
+    ...fetchOptions,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(rules)
@@ -359,6 +371,7 @@ async function addDomain(domain: string, defaultAction?: Action) {
   }
 
   const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain.toLowerCase())}`, {
+    ...fetchOptions,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(rules)
@@ -381,7 +394,7 @@ export function useAddDomain() {
 
 // Add subdomain rule
 async function addSubdomainRule(domain: string, subdomain: string, action: Action) {
-  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`);
+  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, fetchOptions);
   let rules: DomainRules = {};
 
   if (res.ok) {
@@ -395,6 +408,7 @@ async function addSubdomainRule(domain: string, subdomain: string, action: Actio
   rules.subdomains[subdomain.toLowerCase()] = { default: action };
 
   const updateRes = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, {
+    ...fetchOptions,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(rules)
@@ -417,7 +431,7 @@ export function useAddSubdomainRule() {
 
 // Remove subdomain rule
 async function removeSubdomainRule(domain: string, subdomain: string) {
-  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`);
+  const res = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, fetchOptions);
   if (!res.ok) throw new Error('Failed to load domain');
   const data = await res.json();
 
@@ -430,6 +444,7 @@ async function removeSubdomainRule(domain: string, subdomain: string) {
   }
 
   const updateRes = await fetch(`/api/criteria/domain/${encodeURIComponent(domain)}`, {
+    ...fetchOptions,
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(rules)

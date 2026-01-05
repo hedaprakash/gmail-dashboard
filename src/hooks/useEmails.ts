@@ -62,8 +62,13 @@ interface StatsResponse {
   keepRules: number;
 }
 
+// Include credentials for session-based auth (multi-user support)
+const fetchOptions: RequestInit = {
+  credentials: 'include'
+};
+
 async function fetchEmails(): Promise<EmailsResponse> {
-  const res = await fetch('/api/emails');
+  const res = await fetch('/api/emails', fetchOptions);
   if (!res.ok) {
     const data = await res.json();
     throw new Error(data.error || 'Failed to fetch emails');
@@ -72,13 +77,14 @@ async function fetchEmails(): Promise<EmailsResponse> {
 }
 
 async function fetchStats(): Promise<StatsResponse> {
-  const res = await fetch('/api/emails/stats');
+  const res = await fetch('/api/emails/stats', fetchOptions);
   if (!res.ok) throw new Error('Failed to fetch stats');
   return res.json();
 }
 
 async function markKeep(domain: string, subjectPattern: string, category: string) {
   const res = await fetch('/api/actions/mark-keep', {
+    ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, subject_pattern: subjectPattern, category })
@@ -89,6 +95,7 @@ async function markKeep(domain: string, subjectPattern: string, category: string
 
 async function addCriteria(domain: string, subjectPattern: string) {
   const res = await fetch('/api/actions/add-criteria', {
+    ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, subject_pattern: subjectPattern })
@@ -99,6 +106,7 @@ async function addCriteria(domain: string, subjectPattern: string) {
 
 async function addCriteria1d(domain: string, subjectPattern: string) {
   const res = await fetch('/api/actions/add-criteria-1d', {
+    ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, subject_pattern: subjectPattern })
@@ -109,6 +117,7 @@ async function addCriteria1d(domain: string, subjectPattern: string) {
 
 async function addCriteria10d(domain: string, subjectPattern: string) {
   const res = await fetch('/api/actions/add-criteria-10d', {
+    ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ domain, subject_pattern: subjectPattern })

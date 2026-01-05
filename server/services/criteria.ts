@@ -1,20 +1,18 @@
 /**
- * Criteria Service - Unified Format with SQL Server Support
+ * Criteria Service - SQL Server Implementation
  *
- * Handles loading, saving, and matching criteria using either SQL Server
- * or the JSON file, controlled by USE_SQL_DATABASE environment variable.
+ * Handles loading, saving, and matching criteria using SQL Server.
+ * All criteria are stored per-user with audit logging for all changes.
  */
 
-import fs from 'fs';
-import path from 'path';
 import type { EmailData } from '../types/index.js';
-import { USE_SQL_DATABASE } from '../config/database.js';
 import {
   queryAll,
   queryOne,
   query,
   insert,
   remove,
+  logAudit,
   type CriteriaRow,
   type PatternRow,
   type EmailPatternRow,
@@ -54,50 +52,48 @@ export interface MatchResult {
   reason: string;
 }
 
-// Resolve paths relative to the project root (gmail-dashboard)
-const PROJECT_ROOT = process.cwd();
-const DATA_DIR = path.join(PROJECT_ROOT, 'data');
-export const UNIFIED_CRITERIA_FILE = path.join(DATA_DIR, 'criteria_unified.json');
-
-// Legacy file paths (for backwards compatibility during transition)
-export const CRITERIA_FILE = path.join(DATA_DIR, 'criteria.json');
-export const CRITERIA_1DAY_FILE = path.join(DATA_DIR, 'criteria_1day_old.json');
-export const CRITERIA_10DAY_FILE = path.join(DATA_DIR, 'criteria_10day_old.json');
-export const KEEP_CRITERIA_FILE = path.join(DATA_DIR, 'keep_criteria.json');
-
-// Cache for criteria (used for both JSON and SQL modes)
+// Cache for criteria
 let criteriaCache: UnifiedCriteria | null = null;
 let criteriaCacheTime: number = 0;
 const CACHE_TTL = 5000; // 5 seconds
 
+// Default user for backwards compatibility
+const DEFAULT_USER = 'default@user.com';
+
 // ============================================================================
-// SQL-based implementation
+// SQL-based implementation (with user filtering)
 // ============================================================================
 
 /**
  * Load all criteria from SQL Server and transform to UnifiedCriteria format.
+ * Filters by user_email for multi-user support.
  */
-async function loadCriteriaFromSQL(): Promise<UnifiedCriteria> {
+async function loadCriteriaFromSQL(userEmail: string = DEFAULT_USER): Promise<UnifiedCriteria> {
   const criteria: UnifiedCriteria = {};
 
-  // Get all criteria entries
+  // Get all criteria entries for this user
   const rows = await queryAll<CriteriaRow>(`
     SELECT id, key_value, key_type, default_action, parent_id
     FROM criteria
+    WHERE user_email = @userEmail
     ORDER BY key_type, key_value
-  `);
+  `, { userEmail });
 
-  // Get all patterns
+  // Get all patterns for this user's criteria
   const patterns = await queryAll<PatternRow>(`
-    SELECT id, criteria_id, action, pattern
-    FROM patterns
-  `);
+    SELECT p.id, p.criteria_id, p.action, p.pattern
+    FROM patterns p
+    INNER JOIN criteria c ON p.criteria_id = c.id
+    WHERE c.user_email = @userEmail
+  `, { userEmail });
 
-  // Get all email patterns
+  // Get all email patterns for this user's criteria
   const emailPatterns = await queryAll<EmailPatternRow>(`
-    SELECT id, criteria_id, direction, action, email
-    FROM email_patterns
-  `);
+    SELECT ep.id, ep.criteria_id, ep.direction, ep.action, ep.email
+    FROM email_patterns ep
+    INNER JOIN criteria c ON ep.criteria_id = c.id
+    WHERE c.user_email = @userEmail
+  `, { userEmail });
 
   // Create lookup maps
   const patternsByParent = new Map<number, PatternRow[]>();
@@ -179,16 +175,17 @@ async function loadCriteriaFromSQL(): Promise<UnifiedCriteria> {
 }
 
 /**
- * Get or create a criteria entry by key.
+ * Get or create a criteria entry by key for a specific user.
  */
 async function getOrCreateCriteria(
   keyValue: string,
   keyType: 'domain' | 'subdomain' | 'email',
+  userEmail: string = DEFAULT_USER,
   parentId?: number
 ): Promise<number> {
   const existing = await queryOne<{ id: number }>(
-    `SELECT id FROM criteria WHERE key_value = @keyValue`,
-    { keyValue }
+    `SELECT id FROM criteria WHERE key_value = @keyValue AND user_email = @userEmail`,
+    { keyValue, userEmail }
   );
 
   if (existing) {
@@ -198,18 +195,26 @@ async function getOrCreateCriteria(
   const id = await insert('criteria', {
     key_value: keyValue,
     key_type: keyType,
+    user_email: userEmail,
     parent_id: parentId || null,
+  });
+
+  // Audit log: new criteria entry created
+  await logAudit(userEmail, 'INSERT', 'criteria', id, keyValue, {
+    key_type: keyType,
+    parent_id: parentId || null
   });
 
   return id;
 }
 
 /**
- * Add a rule to SQL database.
+ * Add a rule to SQL database for a specific user.
  */
 async function addRuleToSQL(
   domain: string,
   action: Action,
+  userEmail: string = DEFAULT_USER,
   subjectPattern?: string,
   subdomain?: string
 ): Promise<void> {
@@ -218,12 +223,12 @@ async function addRuleToSQL(
 
   if (subdomain) {
     // Ensure parent domain exists
-    const parentId = await getOrCreateCriteria(domainLower, 'domain');
-    criteriaId = await getOrCreateCriteria(subdomain.toLowerCase(), 'subdomain', parentId);
+    const parentId = await getOrCreateCriteria(domainLower, 'domain', userEmail);
+    criteriaId = await getOrCreateCriteria(subdomain.toLowerCase(), 'subdomain', userEmail, parentId);
   } else {
     // Determine if this is an email or domain
     const keyType = domainLower.includes('@') ? 'email' : 'domain';
-    criteriaId = await getOrCreateCriteria(domainLower, keyType);
+    criteriaId = await getOrCreateCriteria(domainLower, keyType, userEmail);
   }
 
   if (subjectPattern) {
@@ -235,10 +240,17 @@ async function addRuleToSQL(
     );
 
     if (!existing) {
-      await insert('patterns', {
+      const patternId = await insert('patterns', {
         criteria_id: criteriaId,
         action,
         pattern: subjectPattern,
+      });
+
+      // Audit log: pattern inserted
+      await logAudit(userEmail, 'INSERT', 'patterns', patternId, domainLower, {
+        action,
+        pattern: subjectPattern,
+        criteria_id: criteriaId
       });
     }
   } else {
@@ -247,6 +259,12 @@ async function addRuleToSQL(
       `UPDATE criteria SET default_action = @action WHERE id = @criteriaId`,
       { criteriaId, action }
     );
+
+    // Audit log: default action updated
+    await logAudit(userEmail, 'UPDATE', 'criteria', criteriaId, domainLower, {
+      action,
+      field: 'default_action'
+    });
   }
 
   // Invalidate cache
@@ -254,21 +272,22 @@ async function addRuleToSQL(
 }
 
 /**
- * Remove a rule from SQL database.
+ * Remove a rule from SQL database for a specific user.
  */
 async function removeRuleFromSQL(
   domain: string,
+  userEmail: string = DEFAULT_USER,
   action?: Action,
   subjectPattern?: string,
   subdomain?: string
 ): Promise<boolean> {
   const domainLower = domain.toLowerCase();
 
-  // Find the criteria entry
+  // Find the criteria entry for this user
   let keyValue = subdomain ? subdomain.toLowerCase() : domainLower;
   const existing = await queryOne<CriteriaRow>(
-    `SELECT id FROM criteria WHERE key_value = @keyValue`,
-    { keyValue }
+    `SELECT id FROM criteria WHERE key_value = @keyValue AND user_email = @userEmail`,
+    { keyValue, userEmail }
   );
 
   if (!existing) {
@@ -285,6 +304,14 @@ async function removeRuleFromSQL(
       { criteriaId: existing.id, action, pattern: subjectPattern }
     );
     removed = result > 0;
+
+    if (removed) {
+      await logAudit(userEmail, 'DELETE', 'patterns', existing.id, domainLower, {
+        action,
+        pattern: subjectPattern,
+        criteria_id: existing.id
+      });
+    }
   } else if (action) {
     // Remove all patterns for action and clear default if matches
     await remove('patterns', 'criteria_id = @criteriaId AND action = @action', {
@@ -297,10 +324,21 @@ async function removeRuleFromSQL(
       { criteriaId: existing.id, action }
     );
     removed = true;
+
+    await logAudit(userEmail, 'DELETE', 'patterns', existing.id, domainLower, {
+      action,
+      type: 'all_patterns_for_action',
+      criteria_id: existing.id
+    });
   } else {
     // Remove entire criteria entry
     await query(`DELETE FROM criteria WHERE id = @id`, { id: existing.id });
     removed = true;
+
+    await logAudit(userEmail, 'DELETE', 'criteria', existing.id, domainLower, {
+      type: 'entire_criteria',
+      key_value: keyValue
+    });
   }
 
   // Invalidate cache
@@ -309,9 +347,9 @@ async function removeRuleFromSQL(
 }
 
 /**
- * Get statistics from SQL database.
+ * Get statistics from SQL database for a specific user.
  */
-async function getStatsFromSQL(): Promise<{
+async function getStatsFromSQL(userEmail: string = DEFAULT_USER): Promise<{
   totalDomains: number;
   withDefault: { delete: number; delete_1d: number; delete_10d: number; keep: number };
   withSubjectPatterns: number;
@@ -335,11 +373,12 @@ async function getStatsFromSQL(): Promise<{
       SUM(CASE WHEN default_action = 'delete_1d' THEN 1 ELSE 0 END) as delete_1d_count,
       SUM(CASE WHEN default_action = 'delete_10d' THEN 1 ELSE 0 END) as delete_10d_count,
       SUM(CASE WHEN default_action = 'keep' THEN 1 ELSE 0 END) as keep_count,
-      (SELECT COUNT(DISTINCT criteria_id) FROM patterns) as with_patterns,
+      (SELECT COUNT(DISTINCT p.criteria_id) FROM patterns p INNER JOIN criteria c ON p.criteria_id = c.id WHERE c.user_email = @userEmail) as with_patterns,
       SUM(CASE WHEN key_type = 'subdomain' THEN 1 ELSE 0 END) as with_subdomains,
-      (SELECT COUNT(DISTINCT criteria_id) FROM email_patterns) as with_email_patterns
+      (SELECT COUNT(DISTINCT ep.criteria_id) FROM email_patterns ep INNER JOIN criteria c ON ep.criteria_id = c.id WHERE c.user_email = @userEmail) as with_email_patterns
     FROM criteria
-  `);
+    WHERE user_email = @userEmail
+  `, { userEmail });
 
   return {
     totalDomains: result?.total || 0,
@@ -357,103 +396,40 @@ async function getStatsFromSQL(): Promise<{
 }
 
 // ============================================================================
-// JSON-based implementation (original)
+// Public API
 // ============================================================================
 
 /**
- * Load the unified criteria from JSON file.
- */
-function loadCriteriaFromJSON(): UnifiedCriteria {
-  try {
-    if (fs.existsSync(UNIFIED_CRITERIA_FILE)) {
-      const content = fs.readFileSync(UNIFIED_CRITERIA_FILE, 'utf-8');
-      return JSON.parse(content) as UnifiedCriteria;
-    }
-  } catch (error) {
-    console.error(`Error loading ${UNIFIED_CRITERIA_FILE}:`, error);
-  }
-  return {};
-}
-
-/**
- * Save the unified criteria to JSON file.
- */
-function saveCriteriaToJSON(criteria: UnifiedCriteria): void {
-  // Sort domains alphabetically
-  const sorted: UnifiedCriteria = {};
-  for (const domain of Object.keys(criteria).sort()) {
-    sorted[domain] = criteria[domain];
-  }
-
-  fs.writeFileSync(UNIFIED_CRITERIA_FILE, JSON.stringify(sorted, null, 2), 'utf-8');
-}
-
-// ============================================================================
-// Public API (auto-selects SQL or JSON based on USE_SQL_DATABASE flag)
-// ============================================================================
-
-/**
- * Load the unified criteria file (sync version).
- * When SQL is enabled, returns cache only (use loadUnifiedCriteriaAsync for fresh data).
+ * Load the unified criteria (sync version).
+ * Returns cache only - use loadUnifiedCriteriaAsync for fresh data from SQL.
  */
 export function loadUnifiedCriteria(): UnifiedCriteria {
   const now = Date.now();
   if (criteriaCache && (now - criteriaCacheTime) < CACHE_TTL) {
     return criteriaCache;
   }
-
-  // When SQL is enabled, return empty object for sync calls
-  // Use loadUnifiedCriteriaAsync() for actual data
-  if (USE_SQL_DATABASE) {
-    return criteriaCache || {};
-  }
-
-  const criteria = loadCriteriaFromJSON();
-  criteriaCache = criteria;
-  criteriaCacheTime = now;
-  return criteria;
+  return criteriaCache || {};
 }
 
 /**
  * Load the unified criteria (async version for SQL).
+ * Supports multi-user with userEmail parameter.
  */
-export async function loadUnifiedCriteriaAsync(): Promise<UnifiedCriteria> {
+export async function loadUnifiedCriteriaAsync(userEmail?: string): Promise<UnifiedCriteria> {
+  // For user-specific queries, bypass cache
+  if (userEmail && userEmail !== DEFAULT_USER) {
+    return await loadCriteriaFromSQL(userEmail);
+  }
+
   const now = Date.now();
   if (criteriaCache && (now - criteriaCacheTime) < CACHE_TTL) {
     return criteriaCache;
   }
 
-  let criteria: UnifiedCriteria;
-
-  if (USE_SQL_DATABASE) {
-    criteria = await loadCriteriaFromSQL();
-  } else {
-    criteria = loadCriteriaFromJSON();
-  }
-
+  const criteria = await loadCriteriaFromSQL(userEmail || DEFAULT_USER);
   criteriaCache = criteria;
   criteriaCacheTime = now;
   return criteria;
-}
-
-/**
- * Save the unified criteria file.
- * When SQL is enabled, this only updates the cache (SQL writes are handled separately).
- */
-export function saveUnifiedCriteria(criteria: UnifiedCriteria): void {
-  // Sort domains alphabetically
-  const sorted: UnifiedCriteria = {};
-  for (const domain of Object.keys(criteria).sort()) {
-    sorted[domain] = criteria[domain];
-  }
-
-  // Only write to JSON file when SQL is disabled
-  if (!USE_SQL_DATABASE) {
-    saveCriteriaToJSON(sorted);
-  }
-
-  criteriaCache = sorted;
-  criteriaCacheTime = Date.now();
 }
 
 /**
@@ -671,599 +647,357 @@ export function matchesKeepCriteria(emailData: EmailData): boolean {
 }
 
 /**
- * Add a rule to the criteria.
- */
-export function addRule(
-  domain: string,
-  action: Action,
-  subjectPattern?: string,
-  subdomain?: string
-): void {
-  if (USE_SQL_DATABASE) {
-    // Queue async operation (fire and forget for sync API)
-    addRuleToSQL(domain, action, subjectPattern, subdomain).catch((err) =>
-      console.error('Failed to add rule to SQL:', err)
-    );
-  }
-
-  // Always update JSON for backup and sync API compatibility
-  const criteria = loadUnifiedCriteria();
-  const domainLower = domain.toLowerCase();
-
-  // Ensure domain exists
-  if (!criteria[domainLower]) {
-    criteria[domainLower] = {};
-  }
-
-  let targetRules = criteria[domainLower];
-
-  // Handle subdomain
-  if (subdomain) {
-    const subdomainLower = subdomain.toLowerCase();
-    if (!targetRules.subdomains) {
-      targetRules.subdomains = {};
-    }
-    if (!targetRules.subdomains[subdomainLower]) {
-      targetRules.subdomains[subdomainLower] = {};
-    }
-    targetRules = targetRules.subdomains[subdomainLower];
-  }
-
-  if (subjectPattern) {
-    // Add to subject pattern list
-    const key = action as 'keep' | 'delete' | 'delete_1d' | 'delete_10d';
-    if (!targetRules[key]) {
-      targetRules[key] = [];
-    }
-    const patternLower = subjectPattern.toLowerCase();
-    if (!targetRules[key]!.some(p => p.toLowerCase() === patternLower)) {
-      targetRules[key]!.push(subjectPattern);
-    }
-  } else {
-    // Set as default action
-    targetRules.default = action;
-  }
-
-  saveUnifiedCriteria(criteria);
-}
-
-/**
- * Add a rule (async version).
+ * Add a rule to the criteria (async, SQL-only).
  */
 export async function addRuleAsync(
   domain: string,
   action: Action,
+  userEmail?: string,
   subjectPattern?: string,
   subdomain?: string
 ): Promise<void> {
-  if (USE_SQL_DATABASE) {
-    await addRuleToSQL(domain, action, subjectPattern, subdomain);
-  }
-
-  // Also update JSON for backup
-  addRule(domain, action, subjectPattern, subdomain);
+  await addRuleToSQL(domain, action, userEmail || DEFAULT_USER, subjectPattern, subdomain);
 }
 
 /**
- * Remove a rule from the criteria.
+ * Remove a rule from the criteria (async, SQL-only).
  * If removing the last rule for a domain, removes the domain entirely.
  */
+export async function removeRuleAsync(
+  domain: string,
+  userEmail?: string,
+  action?: Action,
+  subjectPattern?: string,
+  subdomain?: string
+): Promise<boolean> {
+  return await removeRuleFromSQL(domain, userEmail || DEFAULT_USER, action, subjectPattern, subdomain);
+}
+
+// Sync wrapper for backwards compatibility (fire-and-forget)
 export function removeRule(
   domain: string,
   action?: Action,
   subjectPattern?: string,
-  subdomain?: string
+  subdomain?: string,
+  userEmail?: string
 ): boolean {
-  if (USE_SQL_DATABASE) {
-    // Queue async operation
-    removeRuleFromSQL(domain, action, subjectPattern, subdomain).catch((err) =>
-      console.error('Failed to remove rule from SQL:', err)
-    );
-  }
-
-  // Always update JSON
-  const criteria = loadUnifiedCriteria();
-  const domainLower = domain.toLowerCase();
-
-  if (!criteria[domainLower]) {
-    return false;
-  }
-
-  let targetRules = criteria[domainLower];
-  let parentRules = criteria[domainLower];
-
-  // Handle subdomain
-  if (subdomain) {
-    const subdomainLower = subdomain.toLowerCase();
-    if (!targetRules.subdomains?.[subdomainLower]) {
-      return false;
-    }
-    targetRules = targetRules.subdomains[subdomainLower];
-  }
-
-  let removed = false;
-
-  if (subjectPattern && action) {
-    // Remove specific subject pattern
-    const key = action as 'keep' | 'delete' | 'delete_1d' | 'delete_10d';
-    if (targetRules[key]) {
-      const patternLower = subjectPattern.toLowerCase();
-      const idx = targetRules[key]!.findIndex(p => p.toLowerCase() === patternLower);
-      if (idx >= 0) {
-        targetRules[key]!.splice(idx, 1);
-        if (targetRules[key]!.length === 0) {
-          delete targetRules[key];
-        }
-        removed = true;
-      }
-    }
-  } else if (action) {
-    // Remove all patterns for an action or clear default
-    const key = action as 'keep' | 'delete' | 'delete_1d' | 'delete_10d';
-    if (targetRules[key]) {
-      delete targetRules[key];
-      removed = true;
-    }
-    if (targetRules.default === action) {
-      delete targetRules.default;
-      removed = true;
-    }
-  } else {
-    // Remove entire domain or subdomain
-    if (subdomain) {
-      const subdomainLower = subdomain.toLowerCase();
-      delete parentRules.subdomains![subdomainLower];
-      if (Object.keys(parentRules.subdomains!).length === 0) {
-        delete parentRules.subdomains;
-      }
-    } else {
-      delete criteria[domainLower];
-    }
-    removed = true;
-  }
-
-  // Clean up empty domain entries
-  if (criteria[domainLower]) {
-    const rules = criteria[domainLower];
-    const isEmpty = !rules.default &&
-      !rules.keep?.length &&
-      !rules.delete?.length &&
-      !rules.delete_1d?.length &&
-      !rules.delete_10d?.length &&
-      !rules.excludeSubjects?.length &&
-      !rules.fromEmails &&
-      !rules.toEmails &&
-      !rules.subdomains;
-    if (isEmpty) {
-      delete criteria[domainLower];
-    }
-  }
-
-  if (removed) {
-    saveUnifiedCriteria(criteria);
-  }
-  return removed;
+  removeRuleFromSQL(domain, userEmail || DEFAULT_USER, action, subjectPattern, subdomain).catch((err) =>
+    console.error('Failed to remove rule from SQL:', err)
+  );
+  return true; // Optimistic return
 }
 
 /**
- * Update all rules for a domain (SQL-aware).
+ * Update all rules for a domain (SQL-only).
  * This replaces the domain's rules entirely.
  */
 export async function updateDomainRulesAsync(
   domain: string,
-  rules: DomainRules
+  rules: DomainRules,
+  userEmail: string = DEFAULT_USER
 ): Promise<void> {
   const domainLower = domain.toLowerCase();
 
-  if (USE_SQL_DATABASE) {
-    // Get or create domain entry
-    const criteriaId = await getOrCreateCriteria(domainLower, 'domain');
+  // Get or create domain entry
+  const criteriaId = await getOrCreateCriteria(domainLower, 'domain', userEmail);
 
-    // Update default action
-    if (rules.default !== undefined) {
-      await query(
-        `UPDATE criteria SET default_action = @action WHERE id = @criteriaId`,
-        { criteriaId, action: rules.default }
-      );
-    }
-
-    // Clear existing patterns for this domain
+  // Update default action
+  if (rules.default !== undefined) {
     await query(
-      `DELETE FROM patterns WHERE criteria_id = @criteriaId`,
-      { criteriaId }
+      `UPDATE criteria SET default_action = @action WHERE id = @criteriaId`,
+      { criteriaId, action: rules.default }
     );
-
-    // Add new patterns
-    const patternTypes: (keyof DomainRules)[] = ['keep', 'delete', 'delete_1d', 'delete_10d'];
-    for (const action of patternTypes) {
-      const patterns = rules[action] as string[] | undefined;
-      if (patterns && patterns.length > 0) {
-        for (const pattern of patterns) {
-          await insert('patterns', {
-            criteria_id: criteriaId,
-            action,
-            pattern,
-          });
-        }
-      }
-    }
-
-    // Invalidate cache
-    criteriaCache = null;
   }
 
-  // Always update JSON as backup
-  const criteria = loadUnifiedCriteria();
-  criteria[domainLower] = rules;
-  saveUnifiedCriteria(criteria);
+  // Clear existing patterns for this domain
+  await query(
+    `DELETE FROM patterns WHERE criteria_id = @criteriaId`,
+    { criteriaId }
+  );
+
+  // Add new patterns
+  const patternTypes: (keyof DomainRules)[] = ['keep', 'delete', 'delete_1d', 'delete_10d'];
+  const addedPatterns: Record<string, string[]> = {};
+  for (const action of patternTypes) {
+    const patterns = rules[action] as string[] | undefined;
+    if (patterns && patterns.length > 0) {
+      addedPatterns[action] = [];
+      for (const pattern of patterns) {
+        await insert('patterns', {
+          criteria_id: criteriaId,
+          action,
+          pattern,
+        });
+        addedPatterns[action].push(pattern);
+      }
+    }
+  }
+
+  // Audit log: domain rules updated
+  await logAudit(userEmail, 'UPDATE', 'criteria', criteriaId, domainLower, {
+    operation: 'update_domain_rules',
+    new_default: rules.default || null,
+    patterns_added: addedPatterns
+  });
+
+  // Invalidate cache
+  criteriaCache = null;
 }
 
 /**
- * Delete all rules for a domain (SQL-aware).
+ * Delete all rules for a domain (SQL-only).
  */
-export async function deleteDomainAsync(domain: string): Promise<boolean> {
+export async function deleteDomainAsync(
+  domain: string,
+  userEmail: string = DEFAULT_USER
+): Promise<boolean> {
   const domainLower = domain.toLowerCase();
 
-  if (USE_SQL_DATABASE) {
-    // Find the criteria entry for this domain
-    const result = await queryAll<{ id: number }>(
-      `SELECT id FROM criteria WHERE key_value = @domain AND key_type = 'domain'`,
-      { domain: domainLower }
-    );
+  // Find the criteria entry for this domain
+  const result = await queryAll<{ id: number }>(
+    `SELECT id FROM criteria WHERE key_value = @domain AND key_type = 'domain' AND user_email = @userEmail`,
+    { domain: domainLower, userEmail }
+  );
 
-    if (result.length === 0) {
-      // Check in JSON as fallback
-      const criteria = loadUnifiedCriteria();
-      if (!criteria[domainLower]) {
-        return false;
-      }
-      delete criteria[domainLower];
-      saveUnifiedCriteria(criteria);
-      return true;
-    }
-
-    const criteriaId = result[0].id;
-
-    // Delete patterns first (foreign key - cascade should handle this but be explicit)
-    await query(
-      `DELETE FROM patterns WHERE criteria_id = @criteriaId`,
-      { criteriaId }
-    );
-
-    // Delete email_patterns if any
-    await query(
-      `DELETE FROM email_patterns WHERE criteria_id = @criteriaId`,
-      { criteriaId }
-    );
-
-    // Delete the criteria entry
-    await query(
-      `DELETE FROM criteria WHERE id = @criteriaId`,
-      { criteriaId }
-    );
-
-    // Invalidate cache
-    criteriaCache = null;
+  if (result.length === 0) {
+    return false;
   }
 
-  // Also update JSON backup
-  const criteria = loadUnifiedCriteria();
-  if (criteria[domainLower]) {
-    delete criteria[domainLower];
-    saveUnifiedCriteria(criteria);
-  }
+  const criteriaId = result[0].id;
+
+  // Delete patterns first
+  await query(
+    `DELETE FROM patterns WHERE criteria_id = @criteriaId`,
+    { criteriaId }
+  );
+
+  // Delete email_patterns if any
+  await query(
+    `DELETE FROM email_patterns WHERE criteria_id = @criteriaId`,
+    { criteriaId }
+  );
+
+  // Delete the criteria entry
+  await query(
+    `DELETE FROM criteria WHERE id = @criteriaId`,
+    { criteriaId }
+  );
+
+  // Audit log: domain deleted
+  await logAudit(userEmail, 'DELETE', 'criteria', criteriaId, domainLower, {
+    operation: 'delete_domain',
+    key_type: 'domain'
+  });
+
+  // Invalidate cache
+  criteriaCache = null;
   return true;
 }
 
 /**
- * Mark a domain/pattern as keep (SQL-aware).
+ * Mark a domain/pattern as keep (SQL-aware with multi-user support).
  * Removes from delete/delete_1d/delete_10d lists and adds to keep.
  * Returns the number of delete rules removed.
  */
 export async function markKeepAsync(
   domain: string,
+  userEmail?: string,
   subjectPattern?: string
 ): Promise<{ removedCount: number; rules: DomainRules | null }> {
   const domainLower = domain.toLowerCase();
+  const user = userEmail || DEFAULT_USER;
   let removedCount = 0;
 
-  if (USE_SQL_DATABASE) {
-    // Get criteria ID for this domain
-    const result = await queryAll<{ id: number }>(
-      `SELECT id FROM criteria WHERE key_value = @domain AND key_type = 'domain'`,
-      { domain: domainLower }
-    );
+  // Get criteria ID for this domain and user
+  const result = await queryAll<{ id: number }>(
+    `SELECT id FROM criteria WHERE key_value = @domain AND key_type = 'domain' AND user_email = @userEmail`,
+    { domain: domainLower, userEmail: user }
+  );
 
-    if (result.length > 0) {
-      const criteriaId = result[0].id;
+  if (result.length > 0) {
+    const criteriaId = result[0].id;
 
-      if (subjectPattern) {
-        // Remove specific pattern from delete lists
-        const patternLower = subjectPattern.toLowerCase();
-        const deleteResult = await query(
-          `DELETE FROM patterns
-           WHERE criteria_id = @criteriaId
-             AND action IN ('delete', 'delete_1d', 'delete_10d')
-             AND LOWER(pattern) = @pattern`,
-          { criteriaId, pattern: patternLower }
-        );
-        removedCount = deleteResult.rowsAffected?.[0] || 0;
+    if (subjectPattern) {
+      // Remove specific pattern from delete lists
+      const patternLower = subjectPattern.toLowerCase();
+      const deleteResult = await query(
+        `DELETE FROM patterns
+         WHERE criteria_id = @criteriaId
+           AND action IN ('delete', 'delete_1d', 'delete_10d')
+           AND LOWER(pattern) = @pattern`,
+        { criteriaId, pattern: patternLower }
+      );
+      removedCount = deleteResult.rowsAffected?.[0] || 0;
 
-        // Add to keep list (if not already there)
-        const existing = await queryAll<{ id: number }>(
-          `SELECT id FROM patterns
-           WHERE criteria_id = @criteriaId
-             AND action = 'keep'
-             AND LOWER(pattern) = @pattern`,
-          { criteriaId, pattern: patternLower }
-        );
-        if (existing.length === 0) {
-          await insert('patterns', {
-            criteria_id: criteriaId,
-            action: 'keep',
-            pattern: subjectPattern,
-          });
-        }
-      } else {
-        // Domain-level keep - remove all delete patterns and set default to keep
-        const deleteResult = await query(
-          `DELETE FROM patterns
-           WHERE criteria_id = @criteriaId
-             AND action IN ('delete', 'delete_1d', 'delete_10d')`,
-          { criteriaId }
-        );
-        removedCount = deleteResult.rowsAffected?.[0] || 0;
-
-        // Update default action to keep
-        await query(
-          `UPDATE criteria SET default_action = 'keep' WHERE id = @criteriaId`,
-          { criteriaId }
-        );
+      if (removedCount > 0) {
+        await logAudit(user, 'DELETE', 'patterns', criteriaId, domainLower, {
+          operation: 'mark_keep',
+          removed_pattern: subjectPattern,
+          removed_count: removedCount
+        });
       }
-    } else {
-      // Domain doesn't exist yet, create it with keep
-      const criteriaId = await getOrCreateCriteria(domainLower, 'domain');
-      if (subjectPattern) {
-        await insert('patterns', {
+
+      // Add to keep list (if not already there)
+      const existing = await queryAll<{ id: number }>(
+        `SELECT id FROM patterns
+         WHERE criteria_id = @criteriaId
+           AND action = 'keep'
+           AND LOWER(pattern) = @pattern`,
+        { criteriaId, pattern: patternLower }
+      );
+      if (existing.length === 0) {
+        const keepId = await insert('patterns', {
           criteria_id: criteriaId,
           action: 'keep',
           pattern: subjectPattern,
         });
-      } else {
-        await query(
-          `UPDATE criteria SET default_action = 'keep' WHERE id = @criteriaId`,
-          { criteriaId }
-        );
-      }
-    }
 
-    // Invalidate cache
-    criteriaCache = null;
-  }
-
-  // Also update JSON backup
-  const criteria = loadUnifiedCriteria();
-  if (criteria[domainLower]) {
-    const rules = criteria[domainLower];
-
-    if (subjectPattern) {
-      // Remove specific pattern from delete lists
-      for (const key of ['delete', 'delete_1d', 'delete_10d'] as const) {
-        if (rules[key]) {
-          const patternLower = subjectPattern.toLowerCase();
-          const idx = rules[key]!.findIndex(p => p.toLowerCase() === patternLower);
-          if (idx >= 0) {
-            rules[key]!.splice(idx, 1);
-            if (rules[key]!.length === 0) delete rules[key];
-            if (!USE_SQL_DATABASE) removedCount++;
-          }
-        }
-      }
-      // Add to keep list
-      if (!rules.keep) rules.keep = [];
-      const patternLower = subjectPattern.toLowerCase();
-      if (!rules.keep.some(p => p.toLowerCase() === patternLower)) {
-        rules.keep.push(subjectPattern);
+        await logAudit(user, 'INSERT', 'patterns', keepId, domainLower, {
+          operation: 'mark_keep',
+          action: 'keep',
+          pattern: subjectPattern
+        });
       }
     } else {
-      // Domain-level keep
-      if (rules.default === 'delete' || rules.default === 'delete_1d' || rules.default === 'delete_10d') {
-        if (!USE_SQL_DATABASE) removedCount++;
-      }
-      if (rules.delete) {
-        if (!USE_SQL_DATABASE) removedCount += rules.delete.length;
-        delete rules.delete;
-      }
-      if (rules.delete_1d) {
-        if (!USE_SQL_DATABASE) removedCount += rules.delete_1d.length;
-        delete rules.delete_1d;
-      }
-      if (rules.delete_10d) {
-        if (!USE_SQL_DATABASE) removedCount += rules.delete_10d.length;
-        delete rules.delete_10d;
-      }
-      rules.default = 'keep';
+      // Domain-level keep - remove all delete patterns and set default to keep
+      const deleteResult = await query(
+        `DELETE FROM patterns
+         WHERE criteria_id = @criteriaId
+           AND action IN ('delete', 'delete_1d', 'delete_10d')`,
+        { criteriaId }
+      );
+      removedCount = deleteResult.rowsAffected?.[0] || 0;
+
+      // Update default action to keep
+      await query(
+        `UPDATE criteria SET default_action = 'keep' WHERE id = @criteriaId`,
+        { criteriaId }
+      );
+
+      await logAudit(user, 'UPDATE', 'criteria', criteriaId, domainLower, {
+        operation: 'mark_keep_all',
+        removed_delete_patterns: removedCount,
+        new_default: 'keep'
+      });
     }
   } else {
-    // Create domain with keep
+    // Domain doesn't exist yet, create it with keep
+    const criteriaId = await getOrCreateCriteria(domainLower, 'domain', user);
     if (subjectPattern) {
-      criteria[domainLower] = { keep: [subjectPattern] };
+      const keepId = await insert('patterns', {
+        criteria_id: criteriaId,
+        action: 'keep',
+        pattern: subjectPattern,
+      });
+
+      await logAudit(user, 'INSERT', 'patterns', keepId, domainLower, {
+        operation: 'mark_keep_new_domain',
+        action: 'keep',
+        pattern: subjectPattern
+      });
     } else {
-      criteria[domainLower] = { default: 'keep' };
+      await query(
+        `UPDATE criteria SET default_action = 'keep' WHERE id = @criteriaId`,
+        { criteriaId }
+      );
+
+      await logAudit(user, 'UPDATE', 'criteria', criteriaId, domainLower, {
+        operation: 'mark_keep_all_new_domain',
+        new_default: 'keep'
+      });
     }
   }
-  saveUnifiedCriteria(criteria);
 
-  // Get updated rules from SQL if available, otherwise from local
-  let finalRules: DomainRules | null;
-  if (USE_SQL_DATABASE) {
-    finalRules = await getDomainCriteriaAsync(domainLower);
-  } else {
-    finalRules = criteria[domainLower] || null;
-  }
+  // Invalidate cache
+  criteriaCache = null;
 
+  // Get updated rules from SQL
+  const finalRules = await getDomainCriteriaAsync(domainLower, user);
   return { removedCount, rules: finalRules };
 }
 
 /**
  * Add exclude subjects to a domain.
+ * NOTE: This is a legacy function - excludeSubjects are no longer actively used.
  */
-export function addExcludeSubjects(domain: string, terms: string[]): void {
-  const criteria = loadUnifiedCriteria();
-  const domainLower = domain.toLowerCase();
-
-  if (!criteria[domainLower]) {
-    criteria[domainLower] = {};
-  }
-
-  if (!criteria[domainLower].excludeSubjects) {
-    criteria[domainLower].excludeSubjects = [];
-  }
-
-  for (const term of terms) {
-    const termLower = term.toLowerCase();
-    if (!criteria[domainLower].excludeSubjects!.some(t => t.toLowerCase() === termLower)) {
-      criteria[domainLower].excludeSubjects!.push(term);
-    }
-  }
-
-  saveUnifiedCriteria(criteria);
+export async function addExcludeSubjects(
+  domain: string,
+  terms: string[],
+  userEmail: string = DEFAULT_USER
+): Promise<void> {
+  // This feature was deprecated - exclude subjects are handled via keep patterns now
+  console.warn('addExcludeSubjects is deprecated - use keep patterns instead');
 }
 
 /**
- * Add an email pattern (fromEmails or toEmails).
+ * Add an email pattern (fromEmails or toEmails) - SQL-only.
  */
 export async function addEmailPattern(
   domain: string,
   direction: 'from' | 'to',
   action: 'keep' | 'delete',
   email: string,
-  subdomain?: string
+  subdomain?: string,
+  userEmail: string = DEFAULT_USER
 ): Promise<void> {
-  // Update JSON
-  const criteria = loadUnifiedCriteria();
   const domainLower = domain.toLowerCase();
+  const keyValue = subdomain || domainLower;
 
-  if (!criteria[domainLower]) {
-    criteria[domainLower] = {};
-  }
+  const criteriaRow = await queryOne<CriteriaRow>(
+    `SELECT id FROM criteria WHERE key_value = @keyValue AND user_email = @userEmail`,
+    { keyValue, userEmail }
+  );
 
-  let targetRules = criteria[domainLower];
+  if (criteriaRow) {
+    const emailPatternId = await insert('email_patterns', {
+      criteria_id: criteriaRow.id,
+      direction,
+      action,
+      email,
+    });
 
-  if (subdomain) {
-    const subdomainLower = subdomain.toLowerCase();
-    if (!targetRules.subdomains) {
-      targetRules.subdomains = {};
-    }
-    if (!targetRules.subdomains[subdomainLower]) {
-      targetRules.subdomains[subdomainLower] = {};
-    }
-    targetRules = targetRules.subdomains[subdomainLower];
-  }
+    await logAudit(userEmail, 'INSERT', 'email_patterns', emailPatternId, domainLower, {
+      direction,
+      action,
+      email,
+      subdomain: subdomain || null
+    });
 
-  const key = direction === 'from' ? 'fromEmails' : 'toEmails';
-  if (!targetRules[key]) {
-    targetRules[key] = {};
-  }
-  if (!targetRules[key]![action]) {
-    targetRules[key]![action] = [];
-  }
-
-  const emailLower = email.toLowerCase();
-  if (!targetRules[key]![action]!.some(e => e.toLowerCase() === emailLower)) {
-    targetRules[key]![action]!.push(email);
-  }
-
-  saveUnifiedCriteria(criteria);
-
-  // Update SQL if enabled
-  if (USE_SQL_DATABASE) {
-    const keyValue = subdomain || domainLower;
-    const criteriaRow = await queryOne<CriteriaRow>(
-      `SELECT id FROM criteria WHERE key_value = @keyValue`,
-      { keyValue }
-    );
-
-    if (criteriaRow) {
-      await insert('email_patterns', {
-        criteria_id: criteriaRow.id,
-        direction,
-        action,
-        email,
-      });
-      invalidateCache();
-    }
+    invalidateCache();
   }
 }
 
 /**
- * Remove an email pattern.
+ * Remove an email pattern - SQL-only.
  */
 export async function removeEmailPattern(
   domain: string,
   direction: 'from' | 'to',
   email: string,
-  subdomain?: string
+  subdomain?: string,
+  userEmail: string = DEFAULT_USER
 ): Promise<boolean> {
-  // Update JSON
-  const criteria = loadUnifiedCriteria();
   const domainLower = domain.toLowerCase();
+  const keyValue = subdomain || domainLower;
 
-  if (!criteria[domainLower]) {
-    return false;
-  }
+  const deleteResult = await query(
+    `DELETE ep FROM email_patterns ep
+     INNER JOIN criteria c ON ep.criteria_id = c.id
+     WHERE c.key_value = @keyValue AND c.user_email = @userEmail AND ep.direction = @direction AND LOWER(ep.email) = LOWER(@email)`,
+    { keyValue, userEmail, direction, email }
+  );
 
-  let targetRules = criteria[domainLower];
-
-  if (subdomain) {
-    const subdomainLower = subdomain.toLowerCase();
-    if (!targetRules.subdomains?.[subdomainLower]) {
-      return false;
-    }
-    targetRules = targetRules.subdomains[subdomainLower];
-  }
-
-  const key = direction === 'from' ? 'fromEmails' : 'toEmails';
-  if (!targetRules[key]) {
-    return false;
-  }
-
-  let removed = false;
-  const emailLower = email.toLowerCase();
-
-  for (const action of ['keep', 'delete'] as const) {
-    if (targetRules[key]![action]) {
-      const idx = targetRules[key]![action]!.findIndex(e => e.toLowerCase() === emailLower);
-      if (idx >= 0) {
-        targetRules[key]![action]!.splice(idx, 1);
-        if (targetRules[key]![action]!.length === 0) {
-          delete targetRules[key]![action];
-        }
-        removed = true;
-      }
-    }
-  }
-
-  if (Object.keys(targetRules[key]!).length === 0) {
-    delete targetRules[key];
-  }
+  const removed = (deleteResult.rowsAffected?.[0] ?? 0) > 0;
 
   if (removed) {
-    saveUnifiedCriteria(criteria);
+    await logAudit(userEmail, 'DELETE', 'email_patterns', null, domainLower, {
+      direction,
+      email,
+      subdomain: subdomain || null
+    });
   }
 
-  // Update SQL if enabled
-  if (USE_SQL_DATABASE) {
-    const keyValue = subdomain || domainLower;
-    await query(
-      `DELETE ep FROM email_patterns ep
-       INNER JOIN criteria c ON ep.criteria_id = c.id
-       WHERE c.key_value = @keyValue AND ep.direction = @direction AND LOWER(ep.email) = LOWER(@email)`,
-      { keyValue, direction, email }
-    );
-    invalidateCache();
-  }
-
+  invalidateCache();
   return removed;
 }
 
@@ -1275,10 +1009,10 @@ export function getAllCriteria(): UnifiedCriteria {
 }
 
 /**
- * Get all criteria (async version).
+ * Get all criteria (async version with multi-user support).
  */
-export async function getAllCriteriaAsync(): Promise<UnifiedCriteria> {
-  return loadUnifiedCriteriaAsync();
+export async function getAllCriteriaAsync(userEmail?: string): Promise<UnifiedCriteria> {
+  return loadUnifiedCriteriaAsync(userEmail);
 }
 
 /**
@@ -1290,10 +1024,10 @@ export function getDomainCriteria(domain: string): DomainRules | null {
 }
 
 /**
- * Get criteria for a specific domain (async version for SQL).
+ * Get criteria for a specific domain (async version for SQL with multi-user support).
  */
-export async function getDomainCriteriaAsync(domain: string): Promise<DomainRules | null> {
-  const criteria = await loadUnifiedCriteriaAsync();
+export async function getDomainCriteriaAsync(domain: string, userEmail?: string): Promise<DomainRules | null> {
+  const criteria = await loadUnifiedCriteriaAsync(userEmail);
   return criteria[domain.toLowerCase()] || null;
 }
 
@@ -1337,9 +1071,9 @@ export function getCriteriaStats(): {
 }
 
 /**
- * Get statistics (async version for SQL).
+ * Get statistics (async version for SQL with multi-user support).
  */
-export async function getCriteriaStatsAsync(): Promise<{
+export async function getCriteriaStatsAsync(userEmail?: string): Promise<{
   totalDomains: number;
   withDefault: { delete: number; delete_1d: number; delete_10d: number; keep: number };
   withSubjectPatterns: number;
@@ -1347,16 +1081,7 @@ export async function getCriteriaStatsAsync(): Promise<{
   withExcludeSubjects: number;
   withEmailPatterns: number;
 }> {
-  if (USE_SQL_DATABASE) {
-    try {
-      return await getStatsFromSQL();
-    } catch (error) {
-      console.error('Failed to get stats from SQL:', error);
-    }
-  }
-
-  const jsonStats = getCriteriaStats();
-  return { ...jsonStats, withEmailPatterns: 0 };
+  return await getStatsFromSQL(userEmail || DEFAULT_USER);
 }
 
 // Legacy exports for backwards compatibility

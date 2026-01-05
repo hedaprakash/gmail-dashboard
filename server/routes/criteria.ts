@@ -1,14 +1,13 @@
 /**
- * Criteria Routes - Unified Format
+ * Criteria Routes - Unified Format with Multi-User Support
  *
  * API endpoints for managing the unified criteria file.
+ * All criteria are scoped to the authenticated user.
  */
 
 import { Router, Request, Response } from 'express';
 import {
   loadUnifiedCriteriaAsync,
-  saveUnifiedCriteria,
-  addRule,
   removeRule,
   addExcludeSubjects,
   getDomainCriteriaAsync,
@@ -16,21 +15,24 @@ import {
   invalidateCache,
   updateDomainRulesAsync,
   deleteDomainAsync,
+  addRuleAsync,
   type Action,
   type DomainRules,
   type UnifiedCriteria
 } from '../services/criteria.js';
+import { getUserEmail } from '../middleware/auth.js';
 
 const router = Router();
 
 /**
  * GET /api/criteria
- * Get the entire unified criteria file.
+ * Get the entire unified criteria file for the current user.
  */
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const criteria = await loadUnifiedCriteriaAsync();
-    const stats = await getCriteriaStatsAsync();
+    const userEmail = getUserEmail(req);
+    const criteria = await loadUnifiedCriteriaAsync(userEmail);
+    const stats = await getCriteriaStatsAsync(userEmail);
 
     res.json({
       success: true,
@@ -48,11 +50,12 @@ router.get('/', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/criteria/stats
- * Get statistics about the criteria.
+ * Get statistics about the criteria for the current user.
  */
-router.get('/stats', async (_req: Request, res: Response) => {
+router.get('/stats', async (req: Request, res: Response) => {
   try {
-    const stats = await getCriteriaStatsAsync();
+    const userEmail = getUserEmail(req);
+    const stats = await getCriteriaStatsAsync(userEmail);
     res.json({ success: true, stats });
   } catch (error) {
     console.error('Error getting stats:', error);
@@ -65,12 +68,13 @@ router.get('/stats', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/criteria/domain/:domain
- * Get criteria for a specific domain.
+ * Get criteria for a specific domain for the current user.
  */
 router.get('/domain/:domain', async (req: Request, res: Response) => {
   try {
+    const userEmail = getUserEmail(req);
     const domain = req.params.domain;
-    const rules = await getDomainCriteriaAsync(domain);
+    const rules = await getDomainCriteriaAsync(domain, userEmail);
 
     if (!rules) {
       res.status(404).json({
@@ -96,12 +100,13 @@ router.get('/domain/:domain', async (req: Request, res: Response) => {
 
 /**
  * POST /api/criteria/rule
- * Add a new rule to the criteria.
+ * Add a new rule to the criteria for the current user.
  *
  * Body: { domain, action, subjectPattern?, subdomain? }
  */
-router.post('/rule', (req: Request, res: Response) => {
+router.post('/rule', async (req: Request, res: Response) => {
   try {
+    const userEmail = getUserEmail(req);
     const { domain, action, subjectPattern, subdomain } = req.body as {
       domain: string;
       action: Action;
@@ -117,21 +122,21 @@ router.post('/rule', (req: Request, res: Response) => {
       return;
     }
 
-    if (!action || !['delete', 'delete_1d', 'keep'].includes(action)) {
+    if (!action || !['delete', 'delete_1d', 'delete_10d', 'keep'].includes(action)) {
       res.status(400).json({
         success: false,
-        error: 'Valid action is required (delete, delete_1d, keep)'
+        error: 'Valid action is required (delete, delete_1d, delete_10d, keep)'
       });
       return;
     }
 
-    addRule(domain, action, subjectPattern, subdomain);
+    await addRuleAsync(domain, action, userEmail, subjectPattern, subdomain);
 
     const message = subjectPattern
       ? `Added ${action} rule for ${domain}: "${subjectPattern}"`
       : `Set default ${action} for ${domain}`;
 
-    console.log(message);
+    console.log(`[${userEmail}] ${message}`);
 
     res.json({
       success: true,
@@ -152,12 +157,13 @@ router.post('/rule', (req: Request, res: Response) => {
 
 /**
  * DELETE /api/criteria/rule
- * Remove a rule from the criteria.
+ * Remove a rule from the criteria for the current user.
  *
  * Body: { domain, action?, subjectPattern?, subdomain? }
  */
 router.delete('/rule', (req: Request, res: Response) => {
   try {
+    const userEmail = getUserEmail(req);
     const { domain, action, subjectPattern, subdomain } = req.body as {
       domain: string;
       action?: Action;
@@ -173,7 +179,7 @@ router.delete('/rule', (req: Request, res: Response) => {
       return;
     }
 
-    const removed = removeRule(domain, action, subjectPattern, subdomain);
+    const removed = removeRule(domain, action, subjectPattern, subdomain, userEmail);
 
     if (!removed) {
       res.status(404).json({
@@ -329,10 +335,11 @@ router.post('/refresh', (_req: Request, res: Response) => {
 
 /**
  * GET /api/criteria/search
- * Search for domains matching a pattern.
+ * Search for domains matching a pattern for the current user.
  */
 router.get('/search', async (req: Request, res: Response) => {
   try {
+    const userEmail = getUserEmail(req);
     const query = (req.query.q as string || '').toLowerCase();
 
     if (!query) {
@@ -343,7 +350,7 @@ router.get('/search', async (req: Request, res: Response) => {
       return;
     }
 
-    const criteria = await loadUnifiedCriteriaAsync();
+    const criteria = await loadUnifiedCriteriaAsync(userEmail);
     const matches: { domain: string; rules: DomainRules }[] = [];
 
     for (const [domain, rules] of Object.entries(criteria)) {
