@@ -346,6 +346,130 @@ export async function trashEmail(messageId: string): Promise<boolean> {
 }
 
 /**
+ * Delete all unread promotional and social emails.
+ * Uses Gmail's built-in category:promotions and category:social labels.
+ */
+export async function deletePromotionalEmails(
+  dryRun = false
+): Promise<{ count: number; deleted: number; errors: number }> {
+  const gmail = await getGmailService();
+  const query = 'category:promotions OR category:social is:unread';
+  let count = 0;
+  let deleted = 0;
+  let errors = 0;
+  let pageToken: string | undefined;
+
+  console.log(`Searching for promotional/social emails: ${query}`);
+
+  while (true) {
+    const response = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: 500,
+      pageToken
+    });
+
+    const messages = response.data.messages;
+    if (!messages || messages.length === 0) {
+      break;
+    }
+
+    count += messages.length;
+
+    if (!dryRun) {
+      // Batch trash messages
+      for (const msg of messages) {
+        try {
+          await gmail.users.messages.trash({
+            userId: 'me',
+            id: msg.id!
+          });
+          deleted++;
+        } catch (error) {
+          console.error(`Error trashing promotional message ${msg.id}:`, error);
+          errors++;
+        }
+      }
+    }
+
+    pageToken = response.data.nextPageToken ?? undefined;
+    if (!pageToken) {
+      break;
+    }
+  }
+
+  console.log(`Promotional emails: found ${count}, deleted ${deleted}, errors ${errors}`);
+  return { count, deleted: dryRun ? 0 : deleted, errors };
+}
+
+/**
+ * Empty the spam folder by trashing all spam emails.
+ */
+export async function emptySpamFolder(
+  dryRun = false
+): Promise<{ count: number; deleted: number; errors: number }> {
+  const gmail = await getGmailService();
+  const query = 'in:spam';
+  let count = 0;
+  let deleted = 0;
+  let errors = 0;
+  let pageToken: string | undefined;
+
+  console.log(`Searching for spam emails: ${query}`);
+
+  while (true) {
+    const response = await gmail.users.messages.list({
+      userId: 'me',
+      q: query,
+      maxResults: 500,
+      pageToken
+    });
+
+    const messages = response.data.messages;
+    if (!messages || messages.length === 0) {
+      break;
+    }
+
+    count += messages.length;
+
+    if (!dryRun) {
+      // Permanently delete spam (not just trash)
+      const messageIds = messages.map(m => m.id!);
+      try {
+        await gmail.users.messages.batchDelete({
+          userId: 'me',
+          requestBody: { ids: messageIds }
+        });
+        deleted += messageIds.length;
+      } catch (error) {
+        console.error('Error batch deleting spam:', error);
+        // Fall back to individual deletion
+        for (const msg of messages) {
+          try {
+            await gmail.users.messages.delete({
+              userId: 'me',
+              id: msg.id!
+            });
+            deleted++;
+          } catch (err) {
+            console.error(`Error deleting spam message ${msg.id}:`, err);
+            errors++;
+          }
+        }
+      }
+    }
+
+    pageToken = response.data.nextPageToken ?? undefined;
+    if (!pageToken) {
+      break;
+    }
+  }
+
+  console.log(`Spam emails: found ${count}, deleted ${deleted}, errors ${errors}`);
+  return { count, deleted: dryRun ? 0 : deleted, errors };
+}
+
+/**
  * Generate Gmail URL for viewing emails.
  */
 export function getGmailUrl(

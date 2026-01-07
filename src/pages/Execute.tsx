@@ -80,6 +80,39 @@ async function reEvaluate(): Promise<{ success: boolean; message: string; summar
   return res.json();
 }
 
+interface QuickActionResult {
+  success: boolean;
+  dryRun: boolean;
+  message: string;
+  result: {
+    count: number;
+    deleted: number;
+    errors: number;
+  };
+}
+
+async function deletePromotions(dryRun: boolean): Promise<QuickActionResult> {
+  const res = await fetch('/api/execute/delete-promotions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ dryRun })
+  });
+  if (!res.ok) throw new Error('Delete promotions failed');
+  return res.json();
+}
+
+async function emptySpam(dryRun: boolean): Promise<QuickActionResult> {
+  const res = await fetch('/api/execute/empty-spam', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ dryRun })
+  });
+  if (!res.ok) throw new Error('Empty spam failed');
+  return res.json();
+}
+
 const actionColors: Record<string, { bg: string; text: string; border: string; label: string }> = {
   delete: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', label: 'Delete Now' },
   delete_1d: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', label: 'Delete 1-Day' },
@@ -142,6 +175,35 @@ export default function Execute() {
     },
     onError: (error) => {
       showNotification('error', `Re-evaluation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  // Quick action mutations
+  const promotionsMutation = useMutation({
+    mutationFn: (dryRun: boolean) => deletePromotions(dryRun),
+    onSuccess: (data) => {
+      if (data.dryRun) {
+        showNotification('success', `Found ${data.result.count} promotional/social emails`);
+      } else {
+        showNotification('success', `Deleted ${data.result.deleted} promotional/social emails`);
+      }
+    },
+    onError: (error) => {
+      showNotification('error', `Delete promotions failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+
+  const spamMutation = useMutation({
+    mutationFn: (dryRun: boolean) => emptySpam(dryRun),
+    onSuccess: (data) => {
+      if (data.dryRun) {
+        showNotification('success', `Found ${data.result.count} spam emails`);
+      } else {
+        showNotification('success', `Deleted ${data.result.deleted} spam emails`);
+      }
+    },
+    onError: (error) => {
+      showNotification('error', `Empty spam failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 
@@ -229,6 +291,103 @@ export default function Execute() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h2 className="font-semibold text-gray-700 mb-4">Quick Actions</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Delete emails directly from Gmail categories without using criteria rules.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Delete Promotions */}
+          <div className="border border-purple-200 rounded-lg p-4 bg-purple-50">
+            <h3 className="font-medium text-purple-800 mb-2">Delete Promotions & Social</h3>
+            <p className="text-sm text-purple-600 mb-3">
+              Deletes all unread emails from Gmail's Promotions and Social tabs.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => promotionsMutation.mutate(true)}
+                disabled={promotionsMutation.isPending}
+                className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 disabled:opacity-50 text-sm"
+              >
+                {promotionsMutation.isPending ? 'Checking...' : 'Preview Count'}
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('This will delete ALL unread emails from Promotions and Social. Continue?')) {
+                    promotionsMutation.mutate(false);
+                  }
+                }}
+                disabled={promotionsMutation.isPending}
+                className="px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 text-sm"
+              >
+                Delete All
+              </button>
+            </div>
+            {promotionsMutation.data && (
+              <div className="mt-3 text-sm">
+                {promotionsMutation.data.dryRun ? (
+                  <span className="text-purple-700">
+                    Found: <strong>{promotionsMutation.data.result.count}</strong> emails
+                  </span>
+                ) : (
+                  <span className="text-green-700">
+                    Deleted: <strong>{promotionsMutation.data.result.deleted}</strong> emails
+                    {promotionsMutation.data.result.errors > 0 && (
+                      <span className="text-red-600 ml-2">({promotionsMutation.data.result.errors} errors)</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Empty Spam */}
+          <div className="border border-red-200 rounded-lg p-4 bg-red-50">
+            <h3 className="font-medium text-red-800 mb-2">Empty Spam Folder</h3>
+            <p className="text-sm text-red-600 mb-3">
+              Permanently deletes all emails in the Spam folder.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => spamMutation.mutate(true)}
+                disabled={spamMutation.isPending}
+                className="px-3 py-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50 text-sm"
+              >
+                {spamMutation.isPending ? 'Checking...' : 'Preview Count'}
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm('This will PERMANENTLY delete ALL spam emails. They cannot be recovered. Continue?')) {
+                    spamMutation.mutate(false);
+                  }
+                }}
+                disabled={spamMutation.isPending}
+                className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 text-sm"
+              >
+                Empty Spam
+              </button>
+            </div>
+            {spamMutation.data && (
+              <div className="mt-3 text-sm">
+                {spamMutation.data.dryRun ? (
+                  <span className="text-red-700">
+                    Found: <strong>{spamMutation.data.result.count}</strong> spam emails
+                  </span>
+                ) : (
+                  <span className="text-green-700">
+                    Deleted: <strong>{spamMutation.data.result.deleted}</strong> spam emails
+                    {spamMutation.data.result.errors > 0 && (
+                      <span className="text-red-600 ml-2">({spamMutation.data.result.errors} errors)</span>
+                    )}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Options */}

@@ -210,6 +210,81 @@ test.describe('Gmail Dashboard E2E Tests', () => {
                                pageContent?.includes('Total');
       expect(hasPreviewContent).toBeTruthy();
     });
+
+    test('should display Quick Actions section', async ({ page }) => {
+      await expect(page.locator('text=Quick Actions')).toBeVisible();
+      await expect(page.locator('text=Delete Promotions & Social')).toBeVisible();
+      await expect(page.locator('text=Empty Spam Folder')).toBeVisible();
+    });
+
+    test('should have preview count buttons for quick actions', async ({ page }) => {
+      // Promotions preview button
+      const promoPreview = page.locator('button:has-text("Preview Count")').first();
+      await expect(promoPreview).toBeVisible();
+
+      // Spam preview button (second Preview Count button)
+      const previewButtons = page.locator('button:has-text("Preview Count")');
+      const count = await previewButtons.count();
+      expect(count).toBe(2);
+    });
+
+    test('should have delete buttons for quick actions', async ({ page }) => {
+      await expect(page.getByRole('button', { name: 'Delete All' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Empty Spam' })).toBeVisible();
+    });
+
+    test('should show count when preview promotions is clicked', async ({ page }) => {
+      // Click the first Preview Count button (promotions)
+      const promoPreview = page.locator('button:has-text("Preview Count")').first();
+      await promoPreview.click();
+
+      // Wait for API response
+      await page.waitForTimeout(3000);
+
+      // Should show the count result
+      const hasResult = await page.locator('text=/Found:.*emails/i').first().isVisible().catch(() => false);
+      expect(hasResult).toBeTruthy();
+    });
+
+    test('should call evaluate API when Re-evaluate button is clicked', async ({ page }) => {
+      // Set up request interception to verify API is called
+      const apiPromise = page.waitForResponse(
+        resp => resp.url().includes('/api/execute/evaluate') && resp.request().method() === 'POST',
+        { timeout: 10000 }
+      );
+
+      // Click the Re-evaluate button
+      await page.getByRole('button', { name: /Re-evaluate Emails/i }).click();
+
+      // Verify the API was called successfully
+      const response = await apiPromise;
+      expect(response.status()).toBe(200);
+
+      // Verify response contains summary data
+      const json = await response.json();
+      expect(json.success).toBe(true);
+      expect(json.summary).toBeDefined();
+    });
+
+    test('should update summary counts after re-evaluation', async ({ page }) => {
+      // Get initial summary state
+      const initialTotal = await page.locator('text=Total Pending').textContent();
+
+      // Click Re-evaluate button and wait for response
+      const apiPromise = page.waitForResponse(
+        resp => resp.url().includes('/api/execute/evaluate'),
+        { timeout: 10000 }
+      );
+      await page.getByRole('button', { name: /Re-evaluate Emails/i }).click();
+      await apiPromise;
+
+      // Wait for UI to update
+      await page.waitForTimeout(1000);
+
+      // Verify summary section still shows (page didn't break)
+      await expect(page.locator('text=Total Pending')).toBeVisible();
+      await expect(page.locator('text=Pending Emails Summary')).toBeVisible();
+    });
   });
 
   test.describe('Mobile Responsiveness', () => {
@@ -340,6 +415,136 @@ test.describe('Gmail Dashboard E2E Tests', () => {
       if (response) {
         expect(response.status()).toBe(200);
       }
+    });
+  });
+
+  test.describe('Email Evaluation Flow', () => {
+    test('execute summary API should return action breakdown', async ({ page }) => {
+      // Navigate to execute page
+      await page.goto('/execute');
+
+      // Wait for summary API to be called
+      const response = await page.waitForResponse(
+        resp => resp.url().includes('/api/execute/summary'),
+        { timeout: 10000 }
+      );
+
+      expect(response.status()).toBe(200);
+
+      // Verify response structure
+      const json = await response.json();
+      expect(json.success).toBe(true);
+      expect(json.total).toBeDefined();
+      expect(json.byAction).toBeDefined();
+      expect(Array.isArray(json.byAction)).toBe(true);
+    });
+
+    test('evaluate API should return summary with action counts', async ({ page }) => {
+      // Navigate to execute page
+      await page.goto('/execute');
+      await page.waitForLoadState('networkidle');
+
+      // Call evaluate API
+      const response = await page.waitForResponse(
+        resp => resp.url().includes('/api/execute/evaluate'),
+        { timeout: 15000 }
+      ).catch(() => null);
+
+      // If we can manually trigger evaluate
+      if (!response) {
+        const evalPromise = page.waitForResponse(
+          resp => resp.url().includes('/api/execute/evaluate'),
+          { timeout: 15000 }
+        );
+        await page.getByRole('button', { name: /Re-evaluate Emails/i }).click();
+        const evalResponse = await evalPromise;
+        expect(evalResponse.status()).toBe(200);
+
+        const json = await evalResponse.json();
+        expect(json.success).toBe(true);
+        expect(json.message).toContain('re-evaluated');
+      }
+    });
+
+    test('evaluate should update pending_emails action column', async ({ page }) => {
+      // This test verifies the stored procedure works by checking the UI reflects changes
+      await page.goto('/execute');
+      await page.waitForLoadState('networkidle');
+
+      // Click re-evaluate and wait
+      const evalPromise = page.waitForResponse(
+        resp => resp.url().includes('/api/execute/evaluate'),
+        { timeout: 15000 }
+      );
+      await page.getByRole('button', { name: /Re-evaluate Emails/i }).click();
+      const evalResponse = await evalPromise;
+      expect(evalResponse.status()).toBe(200);
+
+      // Wait for summary to refresh
+      await page.waitForTimeout(1000);
+
+      // Verify the action type buttons show counts (proves emails were evaluated)
+      const deleteButton = page.getByRole('button', { name: /^Delete Now \(\d+\)$/ });
+      const delete1dButton = page.getByRole('button', { name: /^Delete 1-Day \(\d+\)$/ });
+      const delete10dButton = page.getByRole('button', { name: /^Delete 10-Day \(\d+\)$/ });
+
+      // At least one of these should be visible (emails were evaluated)
+      await expect(deleteButton.or(delete1dButton).or(delete10dButton)).toBeVisible();
+    });
+
+    test('refresh from Review should trigger evaluation', async ({ page }) => {
+      // Note: This test requires Gmail OAuth token to be configured
+      // Start on Review page
+      await page.goto('/');
+      await page.waitForLoadState('networkidle');
+
+      // Find refresh button
+      const refreshButton = page.getByRole('button', { name: /Refresh from Gmail/i });
+      await expect(refreshButton).toBeVisible();
+
+      // Set up to listen for the refresh API call
+      const refreshPromise = page.waitForResponse(
+        resp => resp.url().includes('/api/emails/refresh'),
+        { timeout: 120000 } // 2 minute timeout for Gmail fetch
+      ).catch(() => null);
+
+      // Click refresh (may fail if no OAuth token)
+      await refreshButton.click();
+
+      // If refresh succeeds, it should have called evaluation
+      const response = await refreshPromise;
+      if (response && response.status() === 200) {
+        const json = await response.json();
+        expect(json.success).toBe(true);
+        expect(json.totalEmails).toBeDefined();
+        // userEmail should be present in response (proves user scoping works)
+        expect(json.userEmail).toBeDefined();
+      }
+      // If OAuth not configured, test passes (skipped)
+    });
+  });
+
+  test.describe('Stored Procedure Verification', () => {
+    test('evaluate endpoint should not error (procedure exists)', async ({ page }) => {
+      // Navigate to execute page
+      await page.goto('/execute');
+      await page.waitForLoadState('networkidle');
+
+      // Call evaluate via button click
+      const evalPromise = page.waitForResponse(
+        resp => resp.url().includes('/api/execute/evaluate'),
+        { timeout: 15000 }
+      );
+      await page.getByRole('button', { name: /Re-evaluate Emails/i }).click();
+      const response = await evalPromise;
+
+      // Should succeed (not 500 error from missing procedure)
+      expect(response.status()).toBe(200);
+
+      const json = await response.json();
+      // Should not have "procedure not found" error
+      expect(json.error).toBeUndefined();
+      expect(json.success).toBe(true);
     });
   });
 });

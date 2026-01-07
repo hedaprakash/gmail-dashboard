@@ -7,7 +7,7 @@
 
 import { Router, Request, Response } from 'express';
 import { queryAll, query } from '../services/database.js';
-import { trashEmail } from '../services/gmail.js';
+import { trashEmail, deletePromotionalEmails, emptySpamFolder } from '../services/gmail.js';
 import { getUserEmail } from '../middleware/auth.js';
 
 const router = Router();
@@ -315,9 +315,8 @@ router.post('/evaluate', async (req: Request, res: Response) => {
       { userEmail }
     );
 
-    // Call the stored procedure to evaluate pending emails
-    // Note: EvaluatePendingEmails evaluates all emails, but results are user-scoped
-    await query('EXEC dbo.EvaluatePendingEmails');
+    // Call the stored procedure to evaluate pending emails for this user
+    await query('EXEC dbo.EvaluatePendingEmails @UserEmail = @userEmail', { userEmail });
 
     // Get updated summary for this user
     const summaryQuery = `
@@ -340,6 +339,67 @@ router.post('/evaluate', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error evaluating emails:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/execute/delete-promotions
+ * Delete all promotional and social emails from Gmail.
+ * Uses Gmail's category:promotions and category:social labels.
+ */
+router.post('/delete-promotions', async (req: Request, res: Response) => {
+  try {
+    const { dryRun = true } = req.body as { dryRun?: boolean };
+    const userEmail = getUserEmail(req);
+
+    console.log(`[${userEmail}] Deleting promotional emails (dryRun=${dryRun})...`);
+
+    const result = await deletePromotionalEmails(dryRun);
+
+    res.json({
+      success: true,
+      dryRun,
+      message: dryRun
+        ? `Found ${result.count} promotional/social emails`
+        : `Deleted ${result.deleted} promotional/social emails`,
+      result
+    });
+  } catch (error) {
+    console.error('Error deleting promotional emails:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/execute/empty-spam
+ * Empty the spam folder by permanently deleting all spam emails.
+ */
+router.post('/empty-spam', async (req: Request, res: Response) => {
+  try {
+    const { dryRun = true } = req.body as { dryRun?: boolean };
+    const userEmail = getUserEmail(req);
+
+    console.log(`[${userEmail}] Emptying spam folder (dryRun=${dryRun})...`);
+
+    const result = await emptySpamFolder(dryRun);
+
+    res.json({
+      success: true,
+      dryRun,
+      message: dryRun
+        ? `Found ${result.count} spam emails`
+        : `Deleted ${result.deleted} spam emails`,
+      result
+    });
+  } catch (error) {
+    console.error('Error emptying spam folder:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'

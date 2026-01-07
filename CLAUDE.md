@@ -152,6 +152,8 @@ docker-compose up -d
 | `/api/execute/preview` | POST | Preview emails to be deleted |
 | `/api/execute/delete` | POST | Execute batch deletion |
 | `/api/execute/evaluate` | POST | Re-evaluate all pending emails |
+| `/api/execute/delete-promotions` | POST | Delete promotional/social emails |
+| `/api/execute/empty-spam` | POST | Empty spam folder |
 
 ## Commands
 
@@ -240,6 +242,17 @@ Criteria changes are saved to both JSON file and SQL Server. This provides:
 - Keep rules always override delete rules
 - Prevents accidental deletion of important emails
 
+## Workflows
+
+Detailed workflow documentation for specific features:
+
+| Workflow | Description |
+|----------|-------------|
+| [Delete Promotional Emails](docs/workflows/delete-promotional-emails.md) | Empty Gmail's Promotions and Social tabs |
+| [Empty Spam Folder](docs/workflows/empty-spam-folder.md) | Permanently delete all spam emails |
+
+These workflows are accessible via **Execute Page → Quick Actions** section.
+
 ## Testing
 
 ### Run All E2E Tests
@@ -251,12 +264,12 @@ npm run dev
 npm run test:e2e
 ```
 
-### Test Coverage (30 tests)
+### Test Coverage (34 tests)
 - Navigation (4 tests)
 - Review Page (3 tests)
-- Stats Page (3 tests)
+- Stats Page (2 tests)
 - Criteria Manager (6 tests)
-- Execute Page (8 tests)
+- Execute Page (12 tests) - includes Quick Actions
 - Text Selection (2 tests)
 - Delete 10d Feature (3 tests)
 - API Integration (2 tests)
