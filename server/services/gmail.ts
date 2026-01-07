@@ -11,7 +11,10 @@ import type { OAuth2Client } from 'google-auth-library';
 import type { EmailData } from '../types/index.js';
 import { classifyEmail } from './classification.js';
 
-const SCOPES = ['https://mail.google.com/'];
+const SCOPES = [
+  'https://mail.google.com/',
+  'https://www.googleapis.com/auth/contacts.readonly'
+];
 const PROJECT_ROOT = process.cwd();
 const DATA_DIR = path.join(PROJECT_ROOT, 'data');
 const TOKEN_PATH = path.join(DATA_DIR, 'token.json');
@@ -99,7 +102,7 @@ function getTokenExpiry(token: Record<string, unknown>): number | null {
 /**
  * Get or create OAuth2 client.
  */
-function getOAuth2Client(): InstanceType<typeof google.auth.OAuth2> {
+export function getOAuth2Client(): InstanceType<typeof google.auth.OAuth2> {
   if (cachedOAuth2Client) {
     return cachedOAuth2Client;
   }

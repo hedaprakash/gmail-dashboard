@@ -10,6 +10,7 @@ const navItems = [
     items: [
       { path: '/', label: 'Review', icon: '📧' },
       { path: '/stats', label: 'Stats', icon: '📊' },
+      { path: '/contacts', label: 'Contacts', icon: '👥' },
     ]
   },
   {

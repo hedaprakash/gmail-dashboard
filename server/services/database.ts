@@ -155,7 +155,7 @@ export interface CriteriaRow {
   id: number;
   key_value: string;
   key_type: 'domain' | 'subdomain' | 'email';
-  default_action: 'delete' | 'delete_1d' | 'keep' | null;
+  default_action: 'delete' | 'delete_1d' | 'delete_10d' | 'keep' | null;
   parent_id: number | null;
   created_at: Date;
   updated_at: Date;
@@ -164,7 +164,7 @@ export interface CriteriaRow {
 export interface PatternRow {
   id: number;
   criteria_id: number;
-  action: 'keep' | 'delete' | 'delete_1d';
+  action: 'keep' | 'delete' | 'delete_1d' | 'delete_10d';
   pattern: string;
   created_at: Date;
 }

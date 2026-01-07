@@ -17,11 +17,12 @@ const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const UNIFIED_CRITERIA_FILE = path.join(PROJECT_ROOT, 'criteria_unified.json');
 
 interface DomainRules {
-  default?: 'delete' | 'delete_1d' | 'keep' | null;
+  default?: 'delete' | 'delete_1d' | 'delete_10d' | 'keep' | null;
   excludeSubjects?: string[];
   keep?: string[];
   delete?: string[];
   delete_1d?: string[];
+  delete_10d?: string[];
   fromEmails?: { keep?: string[]; delete?: string[] };
   toEmails?: { keep?: string[]; delete?: string[] };
   subdomains?: { [key: string]: DomainRules };
@@ -106,7 +107,7 @@ async function loadFromSQL(): Promise<UnifiedCriteria> {
 
     const rowPatterns = patternsByParent.get(row.id) || [];
     for (const p of rowPatterns) {
-      const key = p.action as 'keep' | 'delete' | 'delete_1d';
+      const key = p.action as 'keep' | 'delete' | 'delete_1d' | 'delete_10d';
       if (!rules[key]) {
         rules[key] = [];
       }

@@ -15,6 +15,7 @@ import criteriaRoutes from './routes/criteria.js';
 import actionRoutes from './routes/actions.js';
 import executeRoutes from './routes/execute.js';
 import authRoutes from './routes/auth.js';
+import contactsRoutes from './routes/contacts.js';
 import { requireAuth } from './middleware/auth.js';
 
 const app = express();
@@ -50,6 +51,7 @@ app.use('/api/emails', requireAuth, emailRoutes);
 app.use('/api/criteria', requireAuth, criteriaRoutes);
 app.use('/api/actions', requireAuth, actionRoutes);
 app.use('/api/execute', requireAuth, executeRoutes);
+app.use('/api/contacts', requireAuth, contactsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

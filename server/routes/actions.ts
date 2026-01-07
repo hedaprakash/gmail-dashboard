@@ -8,7 +8,6 @@
 import { Router, Request, Response } from 'express';
 import {
   removeRule,
-  addExcludeSubjects,
   markKeepAsync,
   getDomainCriteriaAsync,
   addRuleAsync,
@@ -25,7 +24,7 @@ const router = Router();
  */
 router.post('/add-criteria', async (req: Request, res: Response) => {
   try {
-    const { domain, subject_pattern, exclude_subject } = req.body;
+    const { domain, subject_pattern } = req.body;
     const userEmail = getUserEmail(req);
 
     if (!domain) {
@@ -34,14 +33,6 @@ router.post('/add-criteria', async (req: Request, res: Response) => {
         error: 'Domain is required'
       });
       return;
-    }
-
-    // Handle exclude_subject - add to excludeSubjects list
-    if (exclude_subject) {
-      const terms = exclude_subject.split(',').map((t: string) => t.trim()).filter((t: string) => t);
-      if (terms.length > 0) {
-        addExcludeSubjects(domain, terms);
-      }
     }
 
     // Add the delete rule (with user context)
@@ -76,7 +67,7 @@ router.post('/add-criteria', async (req: Request, res: Response) => {
  */
 router.post('/add-criteria-1d', async (req: Request, res: Response) => {
   try {
-    const { domain, subject_pattern, exclude_subject } = req.body;
+    const { domain, subject_pattern } = req.body;
     const userEmail = getUserEmail(req);
 
     if (!domain) {
@@ -85,14 +76,6 @@ router.post('/add-criteria-1d', async (req: Request, res: Response) => {
         error: 'Domain is required'
       });
       return;
-    }
-
-    // Handle exclude_subject - add to excludeSubjects list
-    if (exclude_subject) {
-      const terms = exclude_subject.split(',').map((t: string) => t.trim()).filter((t: string) => t);
-      if (terms.length > 0) {
-        addExcludeSubjects(domain, terms);
-      }
     }
 
     // Add the delete_1d rule (with user context)
@@ -127,7 +110,7 @@ router.post('/add-criteria-1d', async (req: Request, res: Response) => {
  */
 router.post('/add-criteria-10d', async (req: Request, res: Response) => {
   try {
-    const { domain, subject_pattern, exclude_subject } = req.body;
+    const { domain, subject_pattern } = req.body;
     const userEmail = getUserEmail(req);
 
     if (!domain) {
@@ -136,14 +119,6 @@ router.post('/add-criteria-10d', async (req: Request, res: Response) => {
         error: 'Domain is required'
       });
       return;
-    }
-
-    // Handle exclude_subject - add to excludeSubjects list
-    if (exclude_subject) {
-      const terms = exclude_subject.split(',').map((t: string) => t.trim()).filter((t: string) => t);
-      if (terms.length > 0) {
-        addExcludeSubjects(domain, terms);
-      }
     }
 
     // Add the delete_10d rule (with user context)

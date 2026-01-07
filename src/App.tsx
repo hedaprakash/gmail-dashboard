@@ -5,6 +5,7 @@ import Review from './pages/Review';
 import Stats from './pages/Stats';
 import CriteriaManager from './pages/CriteriaManager';
 import Execute from './pages/Execute';
+import Contacts from './pages/Contacts';
 import Login from './pages/Login';
 
 // Protected route wrapper
@@ -91,6 +92,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <Execute />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/contacts"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Contacts />
             </Layout>
           </ProtectedRoute>
         }

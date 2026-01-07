@@ -2,11 +2,13 @@
  * Execute Routes
  *
  * Handles email deletion execution using SQL Server pending_emails table.
+ * All queries are scoped to the authenticated user.
  */
 
 import { Router, Request, Response } from 'express';
 import { queryAll, query } from '../services/database.js';
 import { trashEmail } from '../services/gmail.js';
+import { getUserEmail } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -51,9 +53,12 @@ interface ExecuteProgress {
 /**
  * GET /api/execute/summary
  * Get summary of pending emails by action type.
+ * Scoped to authenticated user.
  */
-router.get('/summary', async (_req: Request, res: Response) => {
+router.get('/summary', async (req: Request, res: Response) => {
   try {
+    const userEmail = getUserEmail(req);
+
     const summaryQuery = `
       SELECT
         ISNULL(Action, 'undecided') as action,
@@ -61,6 +66,7 @@ router.get('/summary', async (_req: Request, res: Response) => {
         MIN(EmailDate) as oldestDate,
         MAX(EmailDate) as newestDate
       FROM pending_emails
+      WHERE user_email = @userEmail
       GROUP BY Action
       ORDER BY
         CASE Action
@@ -72,11 +78,12 @@ router.get('/summary', async (_req: Request, res: Response) => {
         END
     `;
 
-    const summary = await queryAll<ActionSummary>(summaryQuery);
+    const summary = await queryAll<ActionSummary>(summaryQuery, { userEmail });
 
-    // Also get total count
+    // Also get total count for this user
     const totalResult = await queryAll<{ total: number }>(
-      'SELECT COUNT(*) as total FROM pending_emails'
+      'SELECT COUNT(*) as total FROM pending_emails WHERE user_email = @userEmail',
+      { userEmail }
     );
 
     res.json({
@@ -101,21 +108,24 @@ router.get('/summary', async (_req: Request, res: Response) => {
 /**
  * POST /api/execute/preview
  * Preview which emails would be deleted based on action type and age.
+ * Scoped to authenticated user.
  */
 router.post('/preview', async (req: Request, res: Response) => {
   try {
     const { actionType = 'delete', minAgeDays = 0 } = req.body as ExecuteRequest;
+    const userEmail = getUserEmail(req);
 
     // Calculate cutoff date
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - minAgeDays);
 
-    // Query emails matching the action and age criteria
+    // Query emails matching the action and age criteria for this user
     const matchQuery = `
       SELECT
         GmailId, FromEmail, Subject, EmailDate, MatchedRule
       FROM pending_emails
-      WHERE Action = @actionType
+      WHERE user_email = @userEmail
+        AND Action = @actionType
         AND EmailDate <= @cutoffDate
       ORDER BY EmailDate ASC
     `;
@@ -126,19 +136,20 @@ router.post('/preview', async (req: Request, res: Response) => {
       Subject: string;
       EmailDate: Date;
       MatchedRule: string | null;
-    }>(matchQuery, { actionType, cutoffDate });
+    }>(matchQuery, { userEmail, actionType, cutoffDate });
 
     // Query emails that would be skipped (too recent)
     const skippedQuery = `
       SELECT COUNT(*) as count
       FROM pending_emails
-      WHERE Action = @actionType
+      WHERE user_email = @userEmail
+        AND Action = @actionType
         AND EmailDate > @cutoffDate
     `;
 
     const skippedResult = await queryAll<{ count: number }>(
       skippedQuery,
-      { actionType, cutoffDate }
+      { userEmail, actionType, cutoffDate }
     );
 
     res.json({
@@ -167,22 +178,25 @@ router.post('/preview', async (req: Request, res: Response) => {
 /**
  * POST /api/execute/delete
  * Execute email deletion for specified action type.
+ * Scoped to authenticated user.
  */
 router.post('/delete', async (req: Request, res: Response) => {
   try {
     const { actionType = 'delete', dryRun = true, minAgeDays = 0 } = req.body as ExecuteRequest;
+    const userEmail = getUserEmail(req);
 
-    console.log(`Executing delete: actionType=${actionType}, dryRun=${dryRun}, minAgeDays=${minAgeDays}`);
+    console.log(`[${userEmail}] Executing delete: actionType=${actionType}, dryRun=${dryRun}, minAgeDays=${minAgeDays}`);
 
     // Calculate cutoff date
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - minAgeDays);
 
-    // Get emails to delete
+    // Get emails to delete for this user
     const emailsQuery = `
       SELECT Id, GmailId, FromEmail, Subject, EmailDate
       FROM pending_emails
-      WHERE Action = @actionType
+      WHERE user_email = @userEmail
+        AND Action = @actionType
         AND EmailDate <= @cutoffDate
       ORDER BY EmailDate ASC
     `;
@@ -193,18 +207,19 @@ router.post('/delete', async (req: Request, res: Response) => {
       FromEmail: string;
       Subject: string;
       EmailDate: Date;
-    }>(emailsQuery, { actionType, cutoffDate });
+    }>(emailsQuery, { userEmail, actionType, cutoffDate });
 
-    // Get skipped count
+    // Get skipped count for this user
     const skippedQuery = `
       SELECT COUNT(*) as count
       FROM pending_emails
-      WHERE Action = @actionType
+      WHERE user_email = @userEmail
+        AND Action = @actionType
         AND EmailDate > @cutoffDate
     `;
     const skippedResult = await queryAll<{ count: number }>(
       skippedQuery,
-      { actionType, cutoffDate }
+      { userEmail, actionType, cutoffDate }
     );
 
     const progress: ExecuteProgress = {
@@ -287,26 +302,33 @@ router.post('/delete', async (req: Request, res: Response) => {
 /**
  * POST /api/execute/evaluate
  * Re-evaluate all pending emails using the stored procedure.
+ * Scoped to authenticated user.
  */
-router.post('/evaluate', async (_req: Request, res: Response) => {
+router.post('/evaluate', async (req: Request, res: Response) => {
   try {
-    console.log('Re-evaluating pending emails...');
+    const userEmail = getUserEmail(req);
+    console.log(`[${userEmail}] Re-evaluating pending emails...`);
 
-    // Reset all actions to NULL so they get re-evaluated
-    await query('UPDATE pending_emails SET Action = NULL, MatchedRule = NULL');
+    // Reset all actions to NULL so they get re-evaluated (for this user only)
+    await query(
+      'UPDATE pending_emails SET Action = NULL, MatchedRule = NULL WHERE user_email = @userEmail',
+      { userEmail }
+    );
 
     // Call the stored procedure to evaluate pending emails
+    // Note: EvaluatePendingEmails evaluates all emails, but results are user-scoped
     await query('EXEC dbo.EvaluatePendingEmails');
 
-    // Get updated summary
+    // Get updated summary for this user
     const summaryQuery = `
       SELECT
         ISNULL(Action, 'undecided') as action,
         COUNT(*) as count
       FROM pending_emails
+      WHERE user_email = @userEmail
       GROUP BY Action
     `;
-    const summary = await queryAll<{ action: string; count: number }>(summaryQuery);
+    const summary = await queryAll<{ action: string; count: number }>(summaryQuery, { userEmail });
 
     res.json({
       success: true,
