@@ -11,6 +11,7 @@ import { getCriteriaStats } from '../services/criteria.js';
 import { query, queryAll, getPool } from '../services/database.js';
 import { classifyEmail } from '../services/classification.js';
 import { groupEmailsByPattern, saveCachedEmails } from '../services/cache.js';
+import { getUserEmail } from '../middleware/auth.js';
 import type { EmailData } from '../types/index.js';
 
 const router = Router();
@@ -127,9 +128,11 @@ router.get('/', async (_req: Request, res: Response) => {
  * POST /api/emails/refresh
  * Refresh emails from Gmail API and sync to SQL Server.
  */
-router.post('/refresh', async (_req: Request, res: Response) => {
+router.post('/refresh', async (req: Request, res: Response) => {
   try {
-    console.log('Refreshing emails from Gmail API...');
+    // Get user email for multi-user support
+    const userEmail = getUserEmail(req);
+    console.log(`Refreshing emails from Gmail API for user: ${userEmail}...`);
 
     const emails = await fetchAllUnreadEmails((count) => {
       console.log(`Progress: ${count} emails processed`);
@@ -141,16 +144,17 @@ router.post('/refresh', async (_req: Request, res: Response) => {
     // Sync to SQL Server
     console.log('Syncing to SQL Server...');
 
-    // Clear existing pending emails
-    await query('TRUNCATE TABLE pending_emails');
-    console.log('Cleared pending_emails table');
+    // Clear existing pending emails for this user only
+    await query('DELETE FROM pending_emails WHERE user_email = @userEmail', { userEmail });
+    console.log(`Cleared pending_emails for user: ${userEmail}`);
 
-    // Bulk insert emails (column sizes must match table schema exactly)
+    // Bulk insert emails (table uses PascalCase column names)
     const pool = await getPool();
     const table = new sql.Table('pending_emails');
     table.create = false;
-    // Match exact schema: Id is auto-increment so we skip it
+    // Match exact schema - Id is auto-increment so we skip it
     table.columns.add('GmailId', sql.NVarChar(100), { nullable: true });
+    table.columns.add('user_email', sql.NVarChar(255), { nullable: false }); // Added for multi-user support
     table.columns.add('FromEmail', sql.NVarChar(255), { nullable: true });
     table.columns.add('ToEmail', sql.NVarChar(255), { nullable: true });
     table.columns.add('Subject', sql.NVarChar(500), { nullable: true });
@@ -167,15 +171,16 @@ router.post('/refresh', async (_req: Request, res: Response) => {
       const subject = (email.subject || '').slice(0, 500) || null;
 
       table.rows.add(
-        email.id,
-        fromEmail,
-        toEmail,
-        subject,
-        email.primaryDomain || null,
-        email.subdomain || null,
-        email.date ? new Date(email.date) : null,
-        new Date(),
-        null // Action will be set by evaluation
+        email.id,                                    // GmailId
+        userEmail,                                   // user_email (NEW!)
+        fromEmail,                                   // FromEmail
+        toEmail,                                     // ToEmail
+        subject,                                     // Subject
+        email.primaryDomain || null,                 // PrimaryDomain
+        email.subdomain || null,                     // Subdomain
+        email.date ? new Date(email.date) : null,   // EmailDate
+        new Date(),                                  // ReceivedAt
+        null                                         // Action (will be set by evaluation)
       );
     }
 
@@ -183,15 +188,16 @@ router.post('/refresh', async (_req: Request, res: Response) => {
     await request.bulk(table);
     console.log(`Inserted ${emails.length} emails into pending_emails`);
 
-    // Run evaluation
+    // Run evaluation for this user
     console.log('Re-evaluating pending emails...');
-    await query('EXEC dbo.EvaluatePendingEmails');
+    await query('EXEC dbo.EvaluatePendingEmails @UserEmail = @userEmail', { userEmail });
     console.log('Evaluation complete');
 
     res.json({
       success: true,
       message: `Fetched ${emails.length} emails from Gmail`,
-      totalEmails: emails.length
+      totalEmails: emails.length,
+      userEmail
     });
   } catch (error) {
     console.error('Error refreshing emails:', error);

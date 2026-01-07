@@ -4,9 +4,11 @@ test.describe('Gmail Dashboard E2E Tests', () => {
   test.beforeEach(async ({ page }) => {
     // Set viewport to desktop size so sidebar is visible
     await page.setViewportSize({ width: 1280, height: 800 });
-    // Wait for app to load
-    await page.goto('/');
+    // Authenticate using the ?authenticated=true parameter (simulates OAuth callback)
+    await page.goto('/?authenticated=true');
     await page.waitForLoadState('networkidle');
+    // Wait for redirect to complete (removes ?authenticated=true from URL)
+    await page.waitForTimeout(500);
   });
 
   test.describe('Navigation', () => {
@@ -303,7 +305,7 @@ test.describe('Gmail Dashboard E2E Tests', () => {
 
   test.describe('Text Selection Feature', () => {
     test('subject text should be selectable', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/?authenticated=true');
       await page.waitForTimeout(1500);
 
       // Check if pattern items exist and have selectable text
@@ -317,7 +319,7 @@ test.describe('Gmail Dashboard E2E Tests', () => {
     });
 
     test('selection indicator should appear when text is selected', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/?authenticated=true');
       await page.waitForTimeout(1500);
 
       // This test validates the UI structure exists
@@ -334,7 +336,7 @@ test.describe('Gmail Dashboard E2E Tests', () => {
 
   test.describe('Delete 10d Feature', () => {
     test('should have Del 10d button on domain header', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/?authenticated=true');
       await page.waitForTimeout(1500);
 
       // Look for domain sections with Del 10d button
@@ -351,7 +353,7 @@ test.describe('Gmail Dashboard E2E Tests', () => {
     });
 
     test('should have 10d button on pattern items', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/?authenticated=true');
       await page.waitForTimeout(1500);
 
       // Look for pattern-level 10d buttons
@@ -365,7 +367,7 @@ test.describe('Gmail Dashboard E2E Tests', () => {
     });
 
     test('should call add-criteria-10d API when Del 10d is clicked', async ({ page }) => {
-      await page.goto('/');
+      await page.goto('/?authenticated=true');
       await page.waitForTimeout(1500);
 
       // Look for a Del 10d button on domain header
@@ -391,7 +393,7 @@ test.describe('Gmail Dashboard E2E Tests', () => {
   test.describe('API Integration', () => {
     test('should load email data from API', async ({ page }) => {
       // Go to review page
-      await page.goto('/');
+      await page.goto('/?authenticated=true');
 
       // Wait for API call to complete
       const response = await page.waitForResponse(
@@ -495,7 +497,7 @@ test.describe('Gmail Dashboard E2E Tests', () => {
     test('refresh from Review should trigger evaluation', async ({ page }) => {
       // Note: This test requires Gmail OAuth token to be configured
       // Start on Review page
-      await page.goto('/');
+      await page.goto('/?authenticated=true');
       await page.waitForLoadState('networkidle');
 
       // Find refresh button

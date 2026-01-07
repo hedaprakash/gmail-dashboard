@@ -5,6 +5,7 @@
  * Supports multi-user authentication via session-based auth.
  */
 
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';

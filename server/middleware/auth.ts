@@ -1,11 +1,15 @@
 /**
  * Authentication Middleware
  *
- * Provides session-based authentication for multi-user support.
- * Extracts user email from session and attaches to request object.
+ * Provides dual authentication for multi-user support:
+ * 1. API Key authentication (for CLI/testing)
+ * 2. Session-based authentication (for browser users)
+ *
+ * See ADR-002 for decision rationale.
  */
 
 import { Request, Response, NextFunction } from 'express';
+import { isAuthenticated } from '../services/gmail.js';
 
 // Extend Express Request to include user info
 declare global {
@@ -27,23 +31,43 @@ declare module 'express-session' {
 
 /**
  * Middleware to require authentication.
- * Returns 401 if user is not authenticated.
+ * Supports two authentication methods:
+ * 1. API Key (X-API-Key header) - for CLI/testing
+ * 2. Session cookie - for browser users
+ *
+ * Returns 401 if neither authentication method succeeds.
  */
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const userEmail = req.session?.userEmail;
-
-  if (!userEmail) {
-    res.status(401).json({
-      success: false,
-      error: 'Not authenticated',
-      code: 'AUTH_REQUIRED'
-    });
+  // 1. Check API Key header (for CLI/testing)
+  const apiKey = req.headers['x-api-key'] as string | undefined;
+  if (apiKey && process.env.API_KEY && apiKey === process.env.API_KEY) {
+    // For testing, also check X-Test-User header (only in non-production)
+    const testUser = req.headers['x-test-user'] as string | undefined;
+    if (testUser && process.env.NODE_ENV !== 'production') {
+      req.user = { email: testUser };
+    } else {
+      // Use email from token.json or fallback
+      const tokenAuth = isAuthenticated();
+      req.user = { email: tokenAuth.email || process.env.DEFAULT_USER || 'api@localhost' };
+    }
+    next();
     return;
   }
 
-  // Attach user to request
-  req.user = { email: userEmail };
-  next();
+  // 2. Check session (browser users)
+  const userEmail = req.session?.userEmail;
+  if (userEmail) {
+    req.user = { email: userEmail };
+    next();
+    return;
+  }
+
+  // 3. No valid authentication
+  res.status(401).json({
+    success: false,
+    error: 'Not authenticated',
+    code: 'AUTH_REQUIRED'
+  });
 }
 
 /**

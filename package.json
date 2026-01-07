@@ -30,6 +30,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "express-session": "^1.18.2",
     "googleapis": "^169.0.0",
