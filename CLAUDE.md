@@ -242,6 +242,111 @@ Criteria changes are saved to both JSON file and SQL Server. This provides:
 - Keep rules always override delete rules
 - Prevents accidental deletion of important emails
 
+## Authentication Architecture
+
+**IMPORTANT**: For authentication issues, start here: [ADR-002: Multi-User Authentication](docs/adr/ADR-002-multi-user-auth.md)
+
+### Overview
+
+The system supports dual authentication:
+
+1. **Browser Session** (OAuth) - For regular users via browser
+2. **API Key** - For CLI/testing without browser
+
+### Token Storage
+
+Tokens are stored in **two places** (dual-write for reliability):
+
+| Storage | Purpose | Location |
+|---------|---------|----------|
+| Database | Primary (multi-user) | `oauth_tokens` table |
+| File | Backup (single-user fallback) | `data/token.json` |
+
+### OAuth Flow (Browser Users)
+
+```
+User clicks "Sign in with Google"
+    ↓
+GET /auth/login → Redirect to Google
+    ↓
+Google consent screen → User approves
+    ↓
+GET /auth/callback?code=xxx
+    ↓
+Backend exchanges code for tokens
+    ↓
+Tokens saved to: database + file
+    ↓
+Session cookie set → User authenticated
+```
+
+### API Key Authentication (CLI/Testing)
+
+```bash
+# Set API key in .env
+API_KEY=your-generated-key
+
+# Use in requests
+curl -H "X-API-Key: your-key" http://localhost:5000/api/execute/summary
+
+# With test user context (for multi-user testing)
+curl -H "X-API-Key: your-key" -H "X-Test-User: test@example.com" \
+  http://localhost:5000/api/execute/summary
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `server/middleware/auth.ts` | Auth middleware (API key + session) |
+| `server/services/tokenStorage.ts` | Database token CRUD |
+| `server/services/gmail.ts` | Gmail API + token management |
+| `server/routes/auth.ts` | OAuth endpoints |
+| `scripts/db/09-create-oauth-tokens-table.sql` | Token table schema |
+| `docs/adr/ADR-002-multi-user-auth.md` | Full decision record |
+
+### Database Tables
+
+```sql
+-- OAuth tokens (per-user)
+oauth_tokens (
+  user_email,      -- Unique per user
+  access_token,    -- Short-lived
+  refresh_token,   -- Long-lived
+  token_expiry,    -- When access_token expires
+  scopes
+)
+
+-- Stored procedures
+UpsertOAuthToken   -- Save/update token
+GetOAuthToken      -- Get token by email
+DeleteOAuthToken   -- Remove token
+GetExpiringTokens  -- For background refresh
+```
+
+### Troubleshooting Authentication
+
+**Problem: 401 Unauthorized**
+1. Check if token exists: `SELECT * FROM oauth_tokens WHERE user_email = 'xxx'`
+2. Check if token.json exists: `ls data/token.json`
+3. Check API key: Verify `X-API-Key` header matches `.env` value
+
+**Problem: Token Expired**
+1. Token should auto-refresh, but if not:
+   - Delete from database: `DELETE FROM oauth_tokens WHERE user_email = 'xxx'`
+   - Delete file: `rm data/token.json`
+   - Re-authenticate via browser
+
+**Problem: Multi-User Data Not Isolated**
+1. Check `user_email` column in queries
+2. Verify `getUserEmail(req)` is called in route handlers
+3. Run isolation tests: `scripts/db/08-multi-user-tests.sql`
+
+**Problem: API Key Not Working**
+1. Check `.env` has `API_KEY=xxx`
+2. Restart server to load env: `npm run dev`
+3. Verify header: `curl -v -H "X-API-Key: xxx" ...`
+
 ## Workflows
 
 Detailed workflow documentation for specific features:

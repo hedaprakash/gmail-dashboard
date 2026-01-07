@@ -7,7 +7,7 @@
 
 import { Router, Request, Response } from 'express';
 import { queryAll, query } from '../services/database.js';
-import { trashEmail, deletePromotionalEmails, emptySpamFolder } from '../services/gmail.js';
+import { trashEmail, deletePromotionalEmails, emptySpamFolder, type TrashResult } from '../services/gmail.js';
 import { getUserEmail } from '../middleware/auth.js';
 
 const router = Router();
@@ -247,8 +247,8 @@ router.post('/delete', async (req: Request, res: Response) => {
         progress.logs.push(`[DRY-RUN] Would delete: ${email.FromEmail} - ${truncatedSubject}`);
       } else {
         try {
-          const success = await trashEmail(email.GmailId);
-          if (success) {
+          const result = await trashEmail(email.GmailId);
+          if (result.success) {
             progress.deleted++;
             progress.logs.push(`[DELETED] ${email.FromEmail} - ${truncatedSubject}`);
 
@@ -259,8 +259,22 @@ router.post('/delete', async (req: Request, res: Response) => {
             );
           } else {
             progress.errors++;
-            progress.logs.push(`[ERROR] Failed to delete: ${email.FromEmail} - ${truncatedSubject}`);
+            const errorCode = result.error?.code || 'Unknown';
+            const errorMsg = result.error?.message || 'Unknown error';
+            progress.logs.push(`[ERROR] [${errorCode}] ${errorMsg}: ${email.FromEmail} - ${truncatedSubject}`);
+
+            // If 404, the email doesn't exist in Gmail - remove from DB
+            if (result.error?.code === 404) {
+              await query(
+                'DELETE FROM pending_emails WHERE Id = @id',
+                { id: email.Id }
+              );
+              progress.logs.push(`  → Removed stale entry from database`);
+            }
           }
+
+          // Rate limit protection: 100ms delay between API calls (~10 req/sec)
+          await new Promise(resolve => setTimeout(resolve, 100));
         } catch (err) {
           progress.errors++;
           progress.logs.push(`[ERROR] ${err instanceof Error ? err.message : 'Unknown error'}: ${email.FromEmail}`);

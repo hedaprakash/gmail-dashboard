@@ -139,18 +139,21 @@ router.get('/callback', async (req: Request, res: Response) => {
 /**
  * POST /auth/logout
  * Clear authentication and session.
+ * Removes tokens from both database and file.
  */
-router.post('/logout', (req: Request, res: Response) => {
+router.post('/logout', async (req: Request, res: Response) => {
   try {
+    const userEmail = req.session?.userEmail;
+
+    // Clear OAuth token from database and file
+    await clearAuth(userEmail);
+
     // Clear session
     req.session.destroy((err) => {
       if (err) {
         console.error('Error destroying session:', err);
       }
     });
-
-    // Clear OAuth token
-    clearAuth();
 
     res.json({
       success: true,

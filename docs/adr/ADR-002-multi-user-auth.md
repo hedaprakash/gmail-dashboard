@@ -1,6 +1,6 @@
 # ADR-002: Multi-User Authentication and Testing Strategy
 
-**Status:** Proposed
+**Status:** Implemented (Phases 1-3)
 **Date:** 2026-01-06
 **Decision Makers:** Developer
 **Supersedes:** None
@@ -419,24 +419,38 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 | `tests/browser-isolation.spec.ts` | Browser context isolation tests |
 | `scripts/db/08-multi-user-tests.sql` | SQL-level isolation tests |
 
-### Phase 3: Database Token Storage (Future)
+### Phase 3: Database Token Storage (Implemented)
 
 **Purpose**: Scale to multiple users properly
 
-**New Table:**
+**New Table:** `oauth_tokens`
 
 ```sql
 CREATE TABLE oauth_tokens (
   id INT IDENTITY PRIMARY KEY,
   user_email NVARCHAR(255) NOT NULL UNIQUE,
-  access_token NVARCHAR(MAX),      -- Encrypted
-  refresh_token NVARCHAR(MAX),     -- Encrypted
-  token_expiry DATETIME2,
+  access_token NVARCHAR(MAX) NOT NULL,
+  refresh_token NVARCHAR(MAX) NOT NULL,
+  token_expiry DATETIME2 NOT NULL,
   scopes NVARCHAR(MAX),
   created_at DATETIME2 DEFAULT GETDATE(),
   updated_at DATETIME2
 );
 ```
+
+**Stored Procedures Created:**
+- `UpsertOAuthToken` - Insert or update token for user
+- `GetOAuthToken` - Get token by user email
+- `DeleteOAuthToken` - Remove token for user
+- `GetExpiringTokens` - Get tokens expiring within N minutes
+
+**Files Implemented:**
+| File | Purpose |
+|------|---------|
+| `scripts/db/09-create-oauth-tokens-table.sql` | Creates table and stored procedures |
+| `server/services/tokenStorage.ts` | Token CRUD operations |
+| `server/services/gmail.ts` | Updated to use database tokens |
+| `server/routes/auth.ts` | Updated for async token operations |
 
 ### Phase 4: Background Token Refresh (Future)
 

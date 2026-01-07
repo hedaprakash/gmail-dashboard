@@ -2,6 +2,7 @@
  * Gmail Service
  *
  * Handles Gmail API authentication and email fetching.
+ * Supports multi-user token storage via database (ADR-002).
  */
 
 import fs from 'fs';
@@ -10,6 +11,16 @@ import { google, gmail_v1 } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
 import type { EmailData } from '../types/index.js';
 import { classifyEmail } from './classification.js';
+import {
+  saveToken,
+  getToken,
+  deleteToken,
+  hasValidToken,
+  getAnyValidToken,
+  toGoogleToken,
+  type StoredToken,
+  type GoogleToken
+} from './tokenStorage.js';
 
 const SCOPES = [
   'https://mail.google.com/',
@@ -21,10 +32,29 @@ const TOKEN_PATH = path.join(DATA_DIR, 'token.json');
 const CREDENTIALS_PATH = path.join(DATA_DIR, 'credentials.json');
 const BATCH_SIZE = 100;
 
-let gmailService: gmail_v1.Gmail | null = null;
+// Cache Gmail service per user
+const gmailServiceCache: Map<string, gmail_v1.Gmail> = new Map();
 let cachedOAuth2Client: InstanceType<typeof google.auth.OAuth2> | null = null;
 
+// Current user context (set by auth middleware)
+let currentUserEmail: string | null = null;
+
 const REDIRECT_URI = "http://localhost:5000/auth/callback";
+
+/**
+ * Set current user context for Gmail operations.
+ * Called by routes after authentication.
+ */
+export function setCurrentUser(email: string): void {
+  currentUserEmail = email;
+}
+
+/**
+ * Get current user email.
+ */
+export function getCurrentUser(): string | null {
+  return currentUserEmail;
+}
 
 /**
  * Extract email address from a header like 'Name <email@domain.com>'.
@@ -117,8 +147,11 @@ export function getOAuth2Client(): InstanceType<typeof google.auth.OAuth2> {
 
 /**
  * Check if user is authenticated (has valid token).
+ * For backwards compatibility, checks file-based token synchronously.
+ * Use isAuthenticatedAsync for database-based checks.
  */
 export function isAuthenticated(): { authenticated: boolean; email?: string } {
+  // Synchronous check using file (for backwards compatibility)
   if (!fs.existsSync(TOKEN_PATH)) {
     return { authenticated: false };
   }
@@ -138,6 +171,31 @@ export function isAuthenticated(): { authenticated: boolean; email?: string } {
 }
 
 /**
+ * Check if user is authenticated (async, uses database).
+ */
+export async function isAuthenticatedAsync(userEmail?: string): Promise<{ authenticated: boolean; email?: string }> {
+  try {
+    // If specific user provided, check their token
+    if (userEmail) {
+      const hasToken = await hasValidToken(userEmail);
+      return { authenticated: hasToken, email: userEmail };
+    }
+
+    // Otherwise, check for any valid token
+    const token = await getAnyValidToken();
+    if (token) {
+      return { authenticated: true, email: token.userEmail };
+    }
+
+    // Fallback to file-based check
+    return isAuthenticated();
+  } catch (error) {
+    console.error('Error checking authentication:', error);
+    return isAuthenticated();
+  }
+}
+
+/**
  * Get OAuth URL for user to authorize.
  */
 export function getAuthUrl(): string {
@@ -151,22 +209,40 @@ export function getAuthUrl(): string {
 
 /**
  * Handle OAuth callback - exchange code for tokens.
+ * Saves tokens to both database and file (for backwards compatibility).
  */
 export async function handleAuthCallback(code: string): Promise<{ success: boolean; email?: string; error?: string }> {
   try {
     const oauth2Client = getOAuth2Client();
     const { tokens } = await oauth2Client.getToken(code);
+
+    // Save to file for backwards compatibility
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens, null, 2));
     oauth2Client.setCredentials(tokens);
-    gmailService = null;
+
+    // Clear cached service
+    gmailServiceCache.clear();
+
+    // Get user email from Gmail profile
     let email: string | undefined;
     try {
       const gmail = google.gmail({ version: 'v1', auth: oauth2Client as unknown as OAuth2Client });
       const profile = await gmail.users.getProfile({ userId: 'me' });
       email = profile.data.emailAddress || undefined;
-      const updatedTokens = { ...tokens, email };
-      fs.writeFileSync(TOKEN_PATH, JSON.stringify(updatedTokens, null, 2));
-    } catch { }
+
+      if (email) {
+        // Update file with email
+        const updatedTokens = { ...tokens, email };
+        fs.writeFileSync(TOKEN_PATH, JSON.stringify(updatedTokens, null, 2));
+
+        // Save to database
+        await saveToken(email, tokens as GoogleToken);
+        console.log(`[Gmail] Saved token to database for: ${email}`);
+      }
+    } catch (profileError) {
+      console.error('Error getting Gmail profile:', profileError);
+    }
+
     return { success: true, email };
   } catch (error) {
     console.error('Error handling auth callback:', error);
@@ -176,50 +252,114 @@ export async function handleAuthCallback(code: string): Promise<{ success: boole
 
 /**
  * Clear authentication (logout).
+ * Removes token from both database and file.
  */
-export function clearAuth(): void {
+export async function clearAuth(userEmail?: string): Promise<void> {
+  // Clear from database if user email provided
+  if (userEmail) {
+    try {
+      await deleteToken(userEmail);
+      console.log(`[Gmail] Deleted token from database for: ${userEmail}`);
+    } catch (error) {
+      console.error('Error deleting token from database:', error);
+    }
+  }
+
+  // Clear from file
   if (fs.existsSync(TOKEN_PATH)) {
     fs.unlinkSync(TOKEN_PATH);
   }
-  gmailService = null;
+
+  // Clear caches
+  gmailServiceCache.clear();
   cachedOAuth2Client = null;
+  currentUserEmail = null;
 }
 
 /**
- * Get or create Gmail API service.
+ * Get or create Gmail API service for a specific user.
+ * Uses database token storage with file fallback.
  */
-export async function getGmailService(): Promise<gmail_v1.Gmail> {
-  if (gmailService) {
-    return gmailService;
+export async function getGmailService(userEmail?: string): Promise<gmail_v1.Gmail> {
+  const effectiveEmail = userEmail || currentUserEmail;
+
+  // Check cache first
+  if (effectiveEmail && gmailServiceCache.has(effectiveEmail)) {
+    return gmailServiceCache.get(effectiveEmail)!;
   }
 
   const oauth2Client = getOAuth2Client();
 
-  // Load token
-  if (!fs.existsSync(TOKEN_PATH)) {
-    throw new Error('NOT_AUTHENTICATED');
+  // Try to get token from database first
+  let storedToken: StoredToken | null = null;
+  if (effectiveEmail) {
+    storedToken = await getToken(effectiveEmail);
   }
 
-  const token = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
-  oauth2Client.setCredentials(token);
+  // Fallback to any valid token
+  if (!storedToken) {
+    storedToken = await getAnyValidToken();
+  }
 
-  // Check if token needs refresh (handles both expiry and expiry_date)
-  const expiry = getTokenExpiry(token);
-  if (expiry && Date.now() >= expiry) {
-    try {
-      const { credentials: newCredentials } = await oauth2Client.refreshAccessToken();
-      oauth2Client.setCredentials(newCredentials);
-      const updatedCredentials = { ...newCredentials, email: token.email };
-      fs.writeFileSync(TOKEN_PATH, JSON.stringify(updatedCredentials, null, 2));
-      console.log('Token refreshed');
-    } catch (error) {
-      console.error('Error refreshing token:', error);
-      throw new Error('TOKEN_EXPIRED');
+  // Final fallback to file
+  if (!storedToken) {
+    if (!fs.existsSync(TOKEN_PATH)) {
+      throw new Error('NOT_AUTHENTICATED');
     }
+    const fileToken = JSON.parse(fs.readFileSync(TOKEN_PATH, 'utf-8'));
+    oauth2Client.setCredentials(fileToken);
+
+    // Check if token needs refresh
+    const expiry = getTokenExpiry(fileToken);
+    if (expiry && Date.now() >= expiry) {
+      await refreshAndSaveToken(oauth2Client, fileToken.email);
+    }
+
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client as unknown as OAuth2Client });
+    return gmail;
   }
 
-  gmailService = google.gmail({ version: 'v1', auth: oauth2Client as unknown as OAuth2Client });
-  return gmailService;
+  // Use database token
+  const googleToken = toGoogleToken(storedToken);
+  oauth2Client.setCredentials(googleToken);
+
+  // Check if token needs refresh
+  if (storedToken.tokenExpiry && Date.now() >= storedToken.tokenExpiry.getTime()) {
+    await refreshAndSaveToken(oauth2Client, storedToken.userEmail);
+  }
+
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client as unknown as OAuth2Client });
+
+  // Cache the service
+  if (storedToken.userEmail) {
+    gmailServiceCache.set(storedToken.userEmail, gmail);
+  }
+
+  return gmail;
+}
+
+/**
+ * Refresh token and save to both database and file.
+ */
+async function refreshAndSaveToken(oauth2Client: InstanceType<typeof google.auth.OAuth2>, userEmail?: string): Promise<void> {
+  try {
+    const { credentials: newCredentials } = await oauth2Client.refreshAccessToken();
+    oauth2Client.setCredentials(newCredentials);
+
+    // Save to file
+    const updatedCredentials = { ...newCredentials, email: userEmail };
+    fs.writeFileSync(TOKEN_PATH, JSON.stringify(updatedCredentials, null, 2));
+
+    // Save to database
+    if (userEmail) {
+      await saveToken(userEmail, newCredentials as GoogleToken);
+    }
+
+    console.log(`[Gmail] Token refreshed for: ${userEmail || 'unknown'}`);
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    throw new Error('TOKEN_EXPIRED');
+  }
 }
 
 /**
@@ -329,19 +469,38 @@ export async function fetchAllUnreadEmails(
 }
 
 /**
- * Delete emails by moving them to trash.
+ * Result type for trash operations with error details.
  */
-export async function trashEmail(messageId: string): Promise<boolean> {
+export interface TrashResult {
+  success: boolean;
+  error?: {
+    code: number;
+    message: string;
+  };
+}
+
+/**
+ * Delete emails by moving them to trash.
+ * Returns error details if deletion fails.
+ */
+export async function trashEmail(messageId: string): Promise<TrashResult> {
   try {
     const gmail = await getGmailService();
     await gmail.users.messages.trash({
       userId: 'me',
       id: messageId
     });
-    return true;
-  } catch (error) {
-    console.error(`Error trashing message ${messageId}:`, error);
-    return false;
+    return { success: true };
+  } catch (error: unknown) {
+    // Extract error code and message from Gmail API error
+    const apiError = error as { response?: { status?: number }; code?: number; message?: string };
+    const code = apiError?.response?.status || apiError?.code || 500;
+    const message = apiError?.message || 'Unknown error';
+    console.error(`Error trashing message ${messageId}: [${code}] ${message}`);
+    return {
+      success: false,
+      error: { code, message }
+    };
   }
 }
 
