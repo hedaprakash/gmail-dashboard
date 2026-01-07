@@ -47,6 +47,8 @@ echo "Copying scripts to container..."
 docker cp scripts/db/01-init-schema.sql gmail-sqlserver:/tmp/01-init-schema.sql
 docker cp scripts/db/02-migrate-data.sql gmail-sqlserver:/tmp/02-migrate-data.sql
 docker cp scripts/db/03-create-evaluate-procedure.sql gmail-sqlserver:/tmp/03-create-evaluate-procedure.sql
+docker cp scripts/db/06-add-multiuser-support.sql gmail-sqlserver:/tmp/06-add-multiuser-support.sql
+docker cp scripts/db/07-create-evaluate-pending-procedure.sql gmail-sqlserver:/tmp/07-create-evaluate-pending-procedure.sql
 
 # Run schema creation
 echo ""
@@ -68,6 +70,20 @@ echo "Creating stored procedures..."
 docker exec gmail-sqlserver /opt/mssql-tools18/bin/sqlcmd \
     -S localhost -U "$DB_USER" -P "$DB_PASSWORD" -C -d "$DB_NAME" \
     -i /tmp/03-create-evaluate-procedure.sql
+
+# Add multi-user support (creates pending_emails table)
+echo ""
+echo "Adding multi-user support..."
+docker exec gmail-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+    -S localhost -U "$DB_USER" -P "$DB_PASSWORD" -C -d "$DB_NAME" \
+    -i /tmp/06-add-multiuser-support.sql
+
+# Create EvaluatePendingEmails procedure
+echo ""
+echo "Creating EvaluatePendingEmails procedure..."
+docker exec gmail-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+    -S localhost -U "$DB_USER" -P "$DB_PASSWORD" -C -d "$DB_NAME" \
+    -i /tmp/07-create-evaluate-pending-procedure.sql
 
 # Verify
 echo ""
