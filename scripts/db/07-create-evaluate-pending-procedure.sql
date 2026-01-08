@@ -109,6 +109,7 @@ BEGIN
                           AND c.user_email = r.UserEmail;
 
     -- A3: Find subdomain criteria (if subdomain exists)
+    -- First try: subdomain entry linked to parent domain
     UPDATE r
     SET SubdomainCriteriaId = c.id
     FROM #Results r
@@ -117,6 +118,18 @@ BEGIN
                           AND c.parent_id = r.DomainCriteriaId
                           AND c.user_email = r.UserEmail
     WHERE r.Subdomain IS NOT NULL AND r.Subdomain <> '';
+
+    -- A3b: Also check for subdomain stored as domain type (e.g., custcomm.icicibank.com as domain)
+    -- This handles cases where subdomain criteria was added without parent linkage
+    UPDATE r
+    SET SubdomainCriteriaId = c.id
+    FROM #Results r
+    INNER JOIN criteria c ON r.Subdomain = c.key_value
+                          AND c.key_type = 'domain'
+                          AND c.user_email = r.UserEmail
+    WHERE r.Subdomain IS NOT NULL
+      AND r.Subdomain <> ''
+      AND r.SubdomainCriteriaId IS NULL;  -- Only if not already matched
 
     -- A4: Set effective criteria (subdomain takes priority over domain)
     UPDATE #Results
