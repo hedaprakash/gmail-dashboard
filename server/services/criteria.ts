@@ -263,47 +263,62 @@ async function callModifyCriteria(
 }
 
 /**
- * Add a rule to SQL database for a specific user.
- * Uses the ModifyCriteria stored procedure.
+ * Result from AddCriteriaRule stored procedure
  */
-async function addRuleToSQL(
-  domain: string,
-  action: Action,
-  userEmail: string = DEFAULT_USER,
-  subjectPattern?: string,
-  subdomain?: string
-): Promise<void> {
-  const domainLower = domain.toLowerCase();
+interface AddCriteriaRuleResult {
+  Success: number;
+  Message: string;
+  CriteriaId: number | null;
+  Level: string;
+  Action: string;
+}
 
-  if (subjectPattern) {
-    // Add subject pattern
-    await callModifyCriteria(
-      'ADD',
-      'subject',
-      userEmail,
-      subjectPattern,
+/**
+ * Call the AddCriteriaRule stored procedure.
+ * TypeScript is a "dumb pipe" - passes raw email fields, SQL handles all business logic.
+ * See: docs/adr/ADR-003-add-criteria-rule-workflow.md
+ */
+async function callAddCriteriaRule(
+  fromEmail: string,
+  toEmail: string,
+  subject: string,
+  action: Action,
+  level: 'domain' | 'subdomain' | 'from_email' | 'to_email',
+  userEmail: string,
+  subjectPattern?: string
+): Promise<{ success: boolean; message: string; criteriaId: number | null }> {
+  const result = await query<AddCriteriaRuleResult>(
+    `EXEC dbo.AddCriteriaRule
+      @FromEmail = @fromEmail,
+      @ToEmail = @toEmail,
+      @Subject = @subject,
+      @Action = @action,
+      @Level = @level,
+      @SubjectPattern = @subjectPattern,
+      @UserEmail = @userEmail`,
+    {
+      fromEmail,
+      toEmail,
+      subject,
       action,
-      domainLower,
-      subdomain?.toLowerCase()
-    );
-  } else if (subdomain) {
-    // Add subdomain default action
-    await callModifyCriteria(
-      'ADD',
-      'subdomain',
-      userEmail,
-      subdomain.toLowerCase(),
-      action,
-      domainLower
-    );
-  } else {
-    // Determine if this is an email or domain
-    const dimension = domainLower.includes('@') ? 'email' : 'domain';
-    await callModifyCriteria('ADD', dimension, userEmail, domainLower, action);
+      level,
+      subjectPattern: subjectPattern || null,
+      userEmail
+    }
+  );
+
+  const row = result.recordset[0];
+
+  // Invalidate cache after successful operation
+  if (row?.Success === 1) {
+    criteriaCache = null;
   }
 
-  // Invalidate cache
-  criteriaCache = null;
+  return {
+    success: row?.Success === 1,
+    message: row?.Message || 'No response',
+    criteriaId: row?.CriteriaId || null
+  };
 }
 
 /**
