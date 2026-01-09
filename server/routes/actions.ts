@@ -21,22 +21,34 @@ const router = Router();
 /**
  * POST /api/actions/add-criteria
  * Add an entry for immediate deletion.
+ * NEW: Accepts raw email fields (fromEmail, toEmail, subject) and level.
  */
 router.post('/add-criteria', async (req: Request, res: Response) => {
   try {
-    const { domain, subject_pattern } = req.body;
+    const { fromEmail, toEmail, subject, level, subject_pattern } = req.body;
     const userEmail = getUserEmail(req);
 
-    if (!domain) {
+    if (!fromEmail) {
       res.status(400).json({
         success: false,
-        error: 'Domain is required'
+        error: 'fromEmail is required'
       });
       return;
     }
 
-    // Add the delete rule (with user context)
-    await addRuleAsync(domain, 'delete', userEmail, subject_pattern || undefined);
+    // Add the delete rule using raw email fields
+    const result = await addRuleAsync({
+      fromEmail,
+      toEmail: toEmail || userEmail,
+      subject: subject || '',
+      action: 'delete',
+      level: level || 'domain',
+      userEmail,
+      subjectPattern: subject_pattern || undefined
+    });
+
+    // Extract domain for logging (stored procedure does this properly)
+    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
 
     // Log the action
     logDelete(domain, subject_pattern || '');
@@ -47,10 +59,11 @@ router.post('/add-criteria', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: subject_pattern ? `Added delete pattern for ${domain}` : `Set default delete for ${domain}`,
+      message: result.message,
       domain,
       subjectPattern: subject_pattern,
-      rules
+      rules,
+      criteriaId: result.criteriaId
     });
   } catch (error) {
     console.error('Error adding criteria:', error);
@@ -64,22 +77,34 @@ router.post('/add-criteria', async (req: Request, res: Response) => {
 /**
  * POST /api/actions/add-criteria-1d
  * Add an entry for deletion after 1 day.
+ * NEW: Accepts raw email fields (fromEmail, toEmail, subject) and level.
  */
 router.post('/add-criteria-1d', async (req: Request, res: Response) => {
   try {
-    const { domain, subject_pattern } = req.body;
+    const { fromEmail, toEmail, subject, level, subject_pattern } = req.body;
     const userEmail = getUserEmail(req);
 
-    if (!domain) {
+    if (!fromEmail) {
       res.status(400).json({
         success: false,
-        error: 'Domain is required'
+        error: 'fromEmail is required'
       });
       return;
     }
 
-    // Add the delete_1d rule (with user context)
-    await addRuleAsync(domain, 'delete_1d', userEmail, subject_pattern || undefined);
+    // Add the delete_1d rule using raw email fields
+    const result = await addRuleAsync({
+      fromEmail,
+      toEmail: toEmail || userEmail,
+      subject: subject || '',
+      action: 'delete_1d',
+      level: level || 'domain',
+      userEmail,
+      subjectPattern: subject_pattern || undefined
+    });
+
+    // Extract domain for logging
+    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
 
     // Log the action
     logDelete1d(domain, subject_pattern || '');
@@ -90,10 +115,11 @@ router.post('/add-criteria-1d', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: subject_pattern ? `Added delete_1d pattern for ${domain}` : `Set default delete_1d for ${domain}`,
+      message: result.message,
       domain,
       subjectPattern: subject_pattern,
-      rules
+      rules,
+      criteriaId: result.criteriaId
     });
   } catch (error) {
     console.error('Error adding 1-day criteria:', error);
@@ -107,22 +133,34 @@ router.post('/add-criteria-1d', async (req: Request, res: Response) => {
 /**
  * POST /api/actions/add-criteria-10d
  * Add an entry for deletion after 10 days.
+ * NEW: Accepts raw email fields (fromEmail, toEmail, subject) and level.
  */
 router.post('/add-criteria-10d', async (req: Request, res: Response) => {
   try {
-    const { domain, subject_pattern } = req.body;
+    const { fromEmail, toEmail, subject, level, subject_pattern } = req.body;
     const userEmail = getUserEmail(req);
 
-    if (!domain) {
+    if (!fromEmail) {
       res.status(400).json({
         success: false,
-        error: 'Domain is required'
+        error: 'fromEmail is required'
       });
       return;
     }
 
-    // Add the delete_10d rule (with user context)
-    await addRuleAsync(domain, 'delete_10d', userEmail, subject_pattern || undefined);
+    // Add the delete_10d rule using raw email fields
+    const result = await addRuleAsync({
+      fromEmail,
+      toEmail: toEmail || userEmail,
+      subject: subject || '',
+      action: 'delete_10d',
+      level: level || 'domain',
+      userEmail,
+      subjectPattern: subject_pattern || undefined
+    });
+
+    // Extract domain for logging
+    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
 
     // Log the action
     logDelete10d(domain, subject_pattern || '');
@@ -133,10 +171,11 @@ router.post('/add-criteria-10d', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: subject_pattern ? `Added delete_10d pattern for ${domain}` : `Set default delete_10d for ${domain}`,
+      message: result.message,
       domain,
       subjectPattern: subject_pattern,
-      rules
+      rules,
+      criteriaId: result.criteriaId
     });
   } catch (error) {
     console.error('Error adding 10-day criteria:', error);
@@ -247,19 +286,23 @@ router.post('/undo-last', (req: Request, res: Response) => {
 /**
  * POST /api/actions/set-default
  * Set the default action for a domain.
+ * NEW: Accepts raw email fields (fromEmail, toEmail, subject) and level.
  */
 router.post('/set-default', async (req: Request, res: Response) => {
   try {
-    const { domain, action } = req.body as {
-      domain: string;
+    const { fromEmail, toEmail, subject, level, action } = req.body as {
+      fromEmail: string;
+      toEmail?: string;
+      subject?: string;
+      level?: 'domain' | 'subdomain' | 'from_email' | 'to_email';
       action: Action;
     };
     const userEmail = getUserEmail(req);
 
-    if (!domain) {
+    if (!fromEmail) {
       res.status(400).json({
         success: false,
-        error: 'Domain is required'
+        error: 'fromEmail is required'
       });
       return;
     }
@@ -272,7 +315,17 @@ router.post('/set-default', async (req: Request, res: Response) => {
       return;
     }
 
-    await addRuleAsync(domain, action, userEmail);
+    const result = await addRuleAsync({
+      fromEmail,
+      toEmail: toEmail || userEmail,
+      subject: subject || '',
+      action,
+      level: level || 'domain',
+      userEmail
+    });
+
+    // Extract domain for logging
+    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
 
     console.log(`[${userEmail}] Set default ${action} for ${domain}`);
 
@@ -280,10 +333,11 @@ router.post('/set-default', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: `Set default ${action} for ${domain}`,
+      message: result.message,
       domain,
       action,
-      rules
+      rules,
+      criteriaId: result.criteriaId
     });
   } catch (error) {
     console.error('Error setting default:', error);
@@ -297,20 +351,24 @@ router.post('/set-default', async (req: Request, res: Response) => {
 /**
  * POST /api/actions/add-pattern
  * Add a subject pattern for a specific action.
+ * NEW: Accepts raw email fields (fromEmail, toEmail, subject) and level.
  */
 router.post('/add-pattern', async (req: Request, res: Response) => {
   try {
-    const { domain, action, pattern } = req.body as {
-      domain: string;
+    const { fromEmail, toEmail, subject, level, action, pattern } = req.body as {
+      fromEmail: string;
+      toEmail?: string;
+      subject?: string;
+      level?: 'domain' | 'subdomain' | 'from_email' | 'to_email';
       action: Action;
       pattern: string;
     };
     const userEmail = getUserEmail(req);
 
-    if (!domain || !pattern) {
+    if (!fromEmail || !pattern) {
       res.status(400).json({
         success: false,
-        error: 'Domain and pattern are required'
+        error: 'fromEmail and pattern are required'
       });
       return;
     }
@@ -323,7 +381,18 @@ router.post('/add-pattern', async (req: Request, res: Response) => {
       return;
     }
 
-    await addRuleAsync(domain, action, userEmail, pattern);
+    const result = await addRuleAsync({
+      fromEmail,
+      toEmail: toEmail || userEmail,
+      subject: subject || '',
+      action,
+      level: level || 'domain',
+      userEmail,
+      subjectPattern: pattern
+    });
+
+    // Extract domain for logging
+    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
 
     console.log(`[${userEmail}] Added ${action} pattern for ${domain}: "${pattern}"`);
 
@@ -331,11 +400,12 @@ router.post('/add-pattern', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message: `Added ${action} pattern for ${domain}`,
+      message: result.message,
       domain,
       action,
       pattern,
-      rules
+      rules,
+      criteriaId: result.criteriaId
     });
   } catch (error) {
     console.error('Error adding pattern:', error);

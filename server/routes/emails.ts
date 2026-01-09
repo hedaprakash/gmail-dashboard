@@ -60,11 +60,14 @@ function sqlRowToEmailData(row: PendingEmailRow): EmailData {
  * GET /api/emails
  * Load undecided emails from SQL Server, grouped by domain/pattern.
  */
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    // Get count of all pending emails
+    const userEmail = getUserEmail(req);
+
+    // Get count of all pending emails for this user
     const totalResult = await queryAll<{ count: number }>(
-      'SELECT COUNT(*) as count FROM pending_emails'
+      'SELECT COUNT(*) as count FROM pending_emails WHERE user_email = @userEmail',
+      { userEmail }
     );
     const totalEmails = totalResult[0]?.count || 0;
 
@@ -76,20 +79,22 @@ router.get('/', async (_req: Request, res: Response) => {
       return;
     }
 
-    // Get undecided emails only (for review)
+    // Get undecided emails only (for review) for this user
     const rows = await queryAll<PendingEmailRow>(
       `SELECT * FROM pending_emails
-       WHERE Action = 'undecided' OR Action IS NULL
-       ORDER BY EmailDate DESC`
+       WHERE user_email = @userEmail AND (Action = 'undecided' OR Action IS NULL)
+       ORDER BY EmailDate DESC`,
+      { userEmail }
     );
 
     // Convert to EmailData format
     const emails: EmailData[] = rows.map(sqlRowToEmailData);
 
-    // Get count of filtered (non-undecided) emails
+    // Get count of filtered (non-undecided) emails for this user
     const decidedResult = await queryAll<{ count: number }>(
       `SELECT COUNT(*) as count FROM pending_emails
-       WHERE Action IS NOT NULL AND Action != 'undecided'`
+       WHERE user_email = @userEmail AND Action IS NOT NULL AND Action != 'undecided'`,
+      { userEmail }
     );
     const filteredOut = decidedResult[0]?.count || 0;
 
@@ -212,11 +217,14 @@ router.post('/refresh', async (req: Request, res: Response) => {
  * GET /api/emails/stats
  * Get email statistics from SQL Server.
  */
-router.get('/stats', async (_req: Request, res: Response) => {
+router.get('/stats', async (req: Request, res: Response) => {
   try {
-    // Get counts by action
+    const userEmail = getUserEmail(req);
+
+    // Get counts by action for this user
     const actionCounts = await queryAll<{ Action: string | null; count: number }>(
-      `SELECT Action, COUNT(*) as count FROM pending_emails GROUP BY Action`
+      `SELECT Action, COUNT(*) as count FROM pending_emails WHERE user_email = @userEmail GROUP BY Action`,
+      { userEmail }
     );
 
     const total = actionCounts.reduce((sum, row) => sum + row.count, 0);
@@ -256,18 +264,21 @@ router.get('/stats', async (_req: Request, res: Response) => {
       }
     }
 
-    // Get domain breakdowns for each action type
+    // Get domain breakdowns for each action type for this user
     const deleteDomains = await queryAll<{ PrimaryDomain: string; count: number }>(
       `SELECT PrimaryDomain, COUNT(*) as count FROM pending_emails
-       WHERE Action = 'delete' GROUP BY PrimaryDomain ORDER BY count DESC`
+       WHERE user_email = @userEmail AND Action = 'delete' GROUP BY PrimaryDomain ORDER BY count DESC`,
+      { userEmail }
     );
     const delete1dDomains = await queryAll<{ PrimaryDomain: string; count: number }>(
       `SELECT PrimaryDomain, COUNT(*) as count FROM pending_emails
-       WHERE Action = 'delete_1d' GROUP BY PrimaryDomain ORDER BY count DESC`
+       WHERE user_email = @userEmail AND Action = 'delete_1d' GROUP BY PrimaryDomain ORDER BY count DESC`,
+      { userEmail }
     );
     const keepDomains = await queryAll<{ PrimaryDomain: string; count: number }>(
       `SELECT PrimaryDomain, COUNT(*) as count FROM pending_emails
-       WHERE Action = 'keep' GROUP BY PrimaryDomain ORDER BY count DESC`
+       WHERE user_email = @userEmail AND Action = 'keep' GROUP BY PrimaryDomain ORDER BY count DESC`,
+      { userEmail }
     );
 
     // Convert to object format and limit to top 10

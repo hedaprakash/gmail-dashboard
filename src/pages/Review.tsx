@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useEmails, useMarkKeep, useAddCriteria, useAddCriteria1d, useAddCriteria10d, formatDateRange } from '../hooks/useEmails';
-import type { DomainGroup } from '../hooks/useEmails';
+import type { DomainGroup, AddCriteriaParams } from '../hooks/useEmails';
 import StatsCard from '../components/Stats/StatsCard';
 import DomainSection from '../components/Email/DomainSection';
 
@@ -95,20 +95,23 @@ export default function Review() {
 
   if (!data) return null;
 
-  const handleKeep = (domain: string, subject: string, category: string) => {
-    markKeep.mutate({ domain, subject, category });
+  // NEW: Handlers receive raw email fields (TypeScript = dumb pipe to stored procedure)
+  const handleKeep = (params: Omit<AddCriteriaParams, 'toEmail'> & { category: string }) => {
+    // TODO: Update markKeep to use new format - for now extract domain for backward compatibility
+    const domain = params.fromEmail.includes('@') ? params.fromEmail.split('@')[1] : params.fromEmail;
+    markKeep.mutate({ domain, subject: params.subjectPattern || '', category: params.category });
   };
 
-  const handleDelete = (domain: string, subject: string) => {
-    addCriteria.mutate({ domain, subject });
+  const handleDelete = (params: Omit<AddCriteriaParams, 'toEmail'>) => {
+    addCriteria.mutate(params as AddCriteriaParams);
   };
 
-  const handleDelete1d = (domain: string, subject: string) => {
-    addCriteria1d.mutate({ domain, subject });
+  const handleDelete1d = (params: Omit<AddCriteriaParams, 'toEmail'>) => {
+    addCriteria1d.mutate(params as AddCriteriaParams);
   };
 
-  const handleDelete10d = (domain: string, subject: string) => {
-    addCriteria10d.mutate({ domain, subject });
+  const handleDelete10d = (params: Omit<AddCriteriaParams, 'toEmail'>) => {
+    addCriteria10d.mutate(params as AddCriteriaParams);
   };
 
   return (

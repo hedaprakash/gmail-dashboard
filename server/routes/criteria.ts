@@ -236,23 +236,26 @@ router.get('/domain/:domain', async (req: Request, res: Response) => {
 /**
  * POST /api/criteria/rule
  * Add a new rule to the criteria for the current user.
+ * NEW: Accepts raw email fields (fromEmail, toEmail, subject) and level.
  *
- * Body: { domain, action, subjectPattern?, subdomain? }
+ * Body: { fromEmail, toEmail?, subject?, level?, action, subjectPattern? }
  */
 router.post('/rule', async (req: Request, res: Response) => {
   try {
     const userEmail = getUserEmail(req);
-    const { domain, action, subjectPattern, subdomain } = req.body as {
-      domain: string;
+    const { fromEmail, toEmail, subject, level, action, subjectPattern } = req.body as {
+      fromEmail: string;
+      toEmail?: string;
+      subject?: string;
+      level?: 'domain' | 'subdomain' | 'from_email' | 'to_email';
       action: Action;
       subjectPattern?: string;
-      subdomain?: string;
     };
 
-    if (!domain) {
+    if (!fromEmail) {
       res.status(400).json({
         success: false,
-        error: 'Domain is required'
+        error: 'fromEmail is required'
       });
       return;
     }
@@ -265,7 +268,18 @@ router.post('/rule', async (req: Request, res: Response) => {
       return;
     }
 
-    await addRuleAsync(domain, action, userEmail, subjectPattern, subdomain);
+    const result = await addRuleAsync({
+      fromEmail,
+      toEmail: toEmail || userEmail,
+      subject: subject || '',
+      action,
+      level: level || 'domain',
+      userEmail,
+      subjectPattern
+    });
+
+    // Extract domain for logging
+    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
 
     const message = subjectPattern
       ? `Added ${action} rule for ${domain}: "${subjectPattern}"`
@@ -275,11 +289,12 @@ router.post('/rule', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      message,
+      message: result.message,
       domain,
       action,
       subjectPattern,
-      subdomain
+      level,
+      criteriaId: result.criteriaId
     });
   } catch (error) {
     console.error('Error adding rule:', error);

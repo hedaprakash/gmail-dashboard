@@ -670,15 +670,29 @@ export function matchesKeepCriteria(emailData: EmailData): boolean {
 
 /**
  * Add a rule to the criteria (async, SQL-only).
+ * NEW SIGNATURE: Accepts raw email fields and level.
+ * TypeScript is a "dumb pipe" - just passes data to stored procedure.
  */
 export async function addRuleAsync(
-  domain: string,
-  action: Action,
-  userEmail?: string,
-  subjectPattern?: string,
-  subdomain?: string
-): Promise<void> {
-  await addRuleToSQL(domain, action, userEmail || DEFAULT_USER, subjectPattern, subdomain);
+  params: {
+    fromEmail: string;
+    toEmail: string;
+    subject: string;
+    action: Action;
+    level: 'domain' | 'subdomain' | 'from_email' | 'to_email';
+    userEmail: string;
+    subjectPattern?: string;
+  }
+): Promise<{ success: boolean; message: string; criteriaId: number | null }> {
+  return await callAddCriteriaRule(
+    params.fromEmail,
+    params.toEmail,
+    params.subject,
+    params.action,
+    params.level,
+    params.userEmail,
+    params.subjectPattern
+  );
 }
 
 /**

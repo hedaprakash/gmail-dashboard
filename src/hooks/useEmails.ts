@@ -93,34 +93,61 @@ async function markKeep(domain: string, subjectPattern: string, category: string
   return res.json();
 }
 
-async function addCriteria(domain: string, subjectPattern: string) {
+// NEW: Pass raw email fields to stored procedure (TypeScript = dumb pipe)
+interface AddCriteriaParams {
+  fromEmail: string;      // Raw sender email (e.g., 'noreply@custcomm.icicibank.com')
+  toEmail?: string;       // Raw recipient email (optional)
+  subject: string;        // Raw subject line
+  level: 'domain' | 'subdomain' | 'from_email' | 'to_email';
+  subjectPattern?: string; // Optional - if user selected text
+}
+
+async function addCriteria(params: AddCriteriaParams) {
   const res = await fetch('/api/actions/add-criteria', {
     ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ domain, subject_pattern: subjectPattern })
+    body: JSON.stringify({
+      fromEmail: params.fromEmail,
+      toEmail: params.toEmail,
+      subject: params.subject,
+      level: params.level,
+      subject_pattern: params.subjectPattern
+    })
   });
   if (!res.ok) throw new Error('Failed to add criteria');
   return res.json();
 }
 
-async function addCriteria1d(domain: string, subjectPattern: string) {
+async function addCriteria1d(params: AddCriteriaParams) {
   const res = await fetch('/api/actions/add-criteria-1d', {
     ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ domain, subject_pattern: subjectPattern })
+    body: JSON.stringify({
+      fromEmail: params.fromEmail,
+      toEmail: params.toEmail,
+      subject: params.subject,
+      level: params.level,
+      subject_pattern: params.subjectPattern
+    })
   });
   if (!res.ok) throw new Error('Failed to add criteria');
   return res.json();
 }
 
-async function addCriteria10d(domain: string, subjectPattern: string) {
+async function addCriteria10d(params: AddCriteriaParams) {
   const res = await fetch('/api/actions/add-criteria-10d', {
     ...fetchOptions,
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ domain, subject_pattern: subjectPattern })
+    body: JSON.stringify({
+      fromEmail: params.fromEmail,
+      toEmail: params.toEmail,
+      subject: params.subject,
+      level: params.level,
+      subject_pattern: params.subjectPattern
+    })
   });
   if (!res.ok) throw new Error('Failed to add criteria');
   return res.json();
@@ -158,8 +185,7 @@ export function useAddCriteria() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ domain, subject }: { domain: string; subject: string }) =>
-      addCriteria(domain, subject),
+    mutationFn: (params: AddCriteriaParams) => addCriteria(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emails'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
@@ -171,8 +197,7 @@ export function useAddCriteria1d() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ domain, subject }: { domain: string; subject: string }) =>
-      addCriteria1d(domain, subject),
+    mutationFn: (params: AddCriteriaParams) => addCriteria1d(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emails'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
@@ -184,14 +209,16 @@ export function useAddCriteria10d() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ domain, subject }: { domain: string; subject: string }) =>
-      addCriteria10d(domain, subject),
+    mutationFn: (params: AddCriteriaParams) => addCriteria10d(params),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emails'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
     }
   });
 }
+
+// Export the interface for use in components
+export type { AddCriteriaParams };
 
 export function formatDateRange(minDate: string, maxDate: string, count: number): string {
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-US', {
