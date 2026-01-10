@@ -127,7 +127,14 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Validate inputs
+    -- Validate @UserEmail FIRST (multi-user security)
+    IF @UserEmail IS NULL OR LTRIM(RTRIM(@UserEmail)) = ''
+    BEGIN
+        RAISERROR('UserEmail is required. Multi-user isolation requires a valid user email.', 16, 1);
+        RETURN -1;
+    END
+
+    -- Validate other inputs
     IF @FromEmail IS NULL OR @FromEmail = ''
     BEGIN
         RAISERROR('FromEmail is required', 16, 1);

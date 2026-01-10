@@ -17,6 +17,7 @@ import actionRoutes from './routes/actions.js';
 import executeRoutes from './routes/execute.js';
 import authRoutes from './routes/auth.js';
 import contactsRoutes from './routes/contacts.js';
+import testingRoutes from './routes/testing.js';
 import { requireAuth } from './middleware/auth.js';
 
 const app = express();
@@ -53,6 +54,7 @@ app.use('/api/criteria', requireAuth, criteriaRoutes);
 app.use('/api/actions', requireAuth, actionRoutes);
 app.use('/api/execute', requireAuth, executeRoutes);
 app.use('/api/contacts', requireAuth, contactsRoutes);
+app.use('/api/testing', requireAuth, testingRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -82,6 +84,10 @@ app.listen(PORT, () => {
   console.log(`  POST /api/actions/add-criteria - Add to delete`);
   console.log(`  POST /api/execute/preview - Preview deletion`);
   console.log(`  POST /api/execute/delete - Execute deletion`);
+  console.log(`  GET  /api/testing/scenarios - List test scenarios`);
+  console.log(`  POST /api/testing/run/:id - Run single test`);
+  console.log(`  POST /api/testing/run-all - Run all tests`);
+  console.log(`  POST /api/testing/reset - Reset test data`);
   console.log(`  GET  /auth/status     - Check auth status`);
   console.log(`  GET  /auth/login      - Start OAuth flow`);
   console.log(`  GET  /auth/callback   - OAuth callback`);

@@ -18,6 +18,7 @@ const navItems = [
     items: [
       { path: '/criteria', label: 'Criteria', icon: '📋' },
       { path: '/execute', label: 'Execute', icon: '▶️' },
+      { path: '/testing', label: 'Testing', icon: '🧪' },
     ]
   }
 ];

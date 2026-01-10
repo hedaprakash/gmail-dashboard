@@ -9,9 +9,11 @@
 --   - POST /api/emails/refresh (after inserting new emails)
 --   - POST /api/execute/evaluate (re-evaluate button)
 --
+-- IMPORTANT: @UserEmail is REQUIRED for multi-user security.
+-- The procedure will fail if UserEmail is NULL or empty.
+--
 -- Usage:
---   EXEC dbo.EvaluatePendingEmails;                    -- All users
---   EXEC dbo.EvaluatePendingEmails @UserEmail = 'user@example.com';  -- Single user
+--   EXEC dbo.EvaluatePendingEmails @UserEmail = 'user@example.com';
 -- ============================================================================
 
 USE GmailCriteria;
@@ -22,10 +24,19 @@ IF OBJECT_ID('dbo.EvaluatePendingEmails', 'P') IS NOT NULL
 GO
 
 CREATE PROCEDURE dbo.EvaluatePendingEmails
-    @UserEmail NVARCHAR(255) = NULL  -- NULL = evaluate all users
+    @UserEmail NVARCHAR(255)  -- REQUIRED: Must provide user email for multi-user isolation
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    -- ========================================================================
+    -- Validate @UserEmail is required for multi-user security
+    -- ========================================================================
+    IF @UserEmail IS NULL OR LTRIM(RTRIM(@UserEmail)) = ''
+    BEGIN
+        RAISERROR('UserEmail is required. Multi-user isolation requires a valid user email.', 16, 1);
+        RETURN -1;
+    END
 
     -- ========================================================================
     -- Temp table to hold evaluation results
@@ -66,7 +77,7 @@ BEGIN
     );
 
     -- ========================================================================
-    -- Load pending emails (optionally filtered by user)
+    -- Load pending emails for this user ONLY
     -- NOTE: Table uses PascalCase column names (GmailId, FromEmail, etc.)
     -- ========================================================================
     INSERT INTO #Results (
@@ -84,7 +95,7 @@ BEGIN
         LOWER(Subdomain),
         EmailDate
     FROM pending_emails
-    WHERE (@UserEmail IS NULL OR user_email = @UserEmail);
+    WHERE user_email = @UserEmail;
 
     -- ========================================================================
     -- Step A: Find criteria entries for each email

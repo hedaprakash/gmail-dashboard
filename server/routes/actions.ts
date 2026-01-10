@@ -232,27 +232,30 @@ router.post('/mark-keep', async (req: Request, res: Response) => {
 
 /**
  * POST /api/actions/undo-last
- * Undo the last action is not straightforward with unified format.
- * This endpoint is deprecated - use specific remove endpoints instead.
+ * Remove a previously added rule.
+ * Supports domain, subdomain, pattern, fromEmail, and toEmail rules.
  */
 router.post('/undo-last', (req: Request, res: Response) => {
   try {
-    const { domain, action, subject_pattern } = req.body as {
+    const { domain, action, subject_pattern, subdomain, fromEmail, toEmail } = req.body as {
       domain?: string;
       action?: Action;
       subject_pattern?: string;
+      subdomain?: string;
+      fromEmail?: string;
+      toEmail?: string;
     };
     const userEmail = getUserEmail(req);
 
     if (!domain) {
       res.status(400).json({
         success: false,
-        error: 'Domain is required for undo in unified format'
+        error: 'Domain is required for undo'
       });
       return;
     }
 
-    const removed = removeRule(domain, action, subject_pattern, undefined, userEmail);
+    const removed = removeRule(domain, action, subject_pattern, subdomain, userEmail);
 
     if (!removed) {
       res.status(404).json({

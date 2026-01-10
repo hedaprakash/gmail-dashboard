@@ -64,6 +64,19 @@ BEGIN
     DECLARE @AffectedRows INT = 0;
     DECLARE @AuditDetails NVARCHAR(MAX);
 
+    -- ====================================================================
+    -- Validate @UserEmail is required for multi-user security
+    -- ====================================================================
+    IF @UserEmail IS NULL OR LTRIM(RTRIM(@UserEmail)) = ''
+    BEGIN
+        SELECT
+            0 AS Success,
+            'UserEmail is required. Multi-user isolation requires a valid user email.' AS Message,
+            NULL AS RecordId,
+            NULL AS AuditId;
+        RETURN -1;
+    END
+
     -- Normalize inputs
     SET @Operation = UPPER(@Operation);
     SET @Dimension = LOWER(@Dimension);

@@ -5,6 +5,7 @@ import Review from './pages/Review';
 import Stats from './pages/Stats';
 import CriteriaManager from './pages/CriteriaManager';
 import Execute from './pages/Execute';
+import Testing from './pages/Testing';
 import Contacts from './pages/Contacts';
 import Login from './pages/Login';
 
@@ -92,6 +93,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <Execute />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/testing"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Testing />
             </Layout>
           </ProtectedRoute>
         }
