@@ -56,6 +56,8 @@ export default function Testing() {
   const handleRunAll = async () => {
     try {
       await runAllMutation.mutateAsync();
+      // Open HTML report in new tab after tests complete
+      window.open('/api/testing/report', '_blank');
     } catch (err) {
       console.error('Error running all tests:', err);
     }
