@@ -6,6 +6,8 @@
  */
 
 import { Router, Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 import {
   TEST_USER_EMAIL,
   getTestScenarios,
@@ -16,6 +18,8 @@ import {
   type TestResult,
   type LogEntry
 } from '../services/testing.js';
+import { fetchReadEmails } from '../services/gmail.js';
+import type { EmailData } from '../types/index.js';
 
 const router = Router();
 
@@ -651,6 +655,292 @@ function generateHtmlReport(data: ReportData): string {
   </div>
 </body>
 </html>`;
+}
+
+// ============================================================================
+// Email Analysis Routes (for creating realistic test scenarios)
+// ============================================================================
+
+const PROJECT_ROOT = process.cwd();
+const LOGS_DIR = path.join(PROJECT_ROOT, 'logs');
+
+/**
+ * POST /api/testing/fetch-read-emails
+ * Fetch read emails from Gmail for analysis.
+ * Saves to logs/read_emails_analysis.json
+ */
+router.post('/fetch-read-emails', async (req: Request, res: Response) => {
+  try {
+    const maxEmails = parseInt(req.query.max as string) || 500;
+
+    logEntries.push({
+      timestamp: new Date().toISOString(),
+      type: 'info',
+      message: `Fetching ${maxEmails} read emails from Gmail for analysis...`
+    });
+
+    const emails = await fetchReadEmails(maxEmails, (count) => {
+      console.log(`Progress: ${count} emails processed`);
+    });
+
+    // Save to analysis file
+    const analysisFile = path.join(LOGS_DIR, 'read_emails_analysis.json');
+    fs.writeFileSync(analysisFile, JSON.stringify(emails, null, 2));
+
+    logEntries.push({
+      timestamp: new Date().toISOString(),
+      type: 'info',
+      message: `Saved ${emails.length} emails to ${analysisFile}`
+    });
+
+    res.json({
+      success: true,
+      message: `Fetched ${emails.length} read emails`,
+      emailCount: emails.length,
+      savedTo: analysisFile
+    });
+  } catch (error) {
+    console.error('Error fetching read emails:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch emails'
+    });
+  }
+});
+
+/**
+ * GET /api/testing/analyze-emails
+ * Analyze fetched emails to find examples for each criteria type.
+ * Returns categorized examples for test scenario creation.
+ */
+router.get('/analyze-emails', async (req: Request, res: Response) => {
+  try {
+    const analysisFile = path.join(LOGS_DIR, 'read_emails_analysis.json');
+
+    if (!fs.existsSync(analysisFile)) {
+      res.status(404).json({
+        success: false,
+        error: 'No analysis file found. Run POST /api/testing/fetch-read-emails first.'
+      });
+      return;
+    }
+
+    const emails: EmailData[] = JSON.parse(fs.readFileSync(analysisFile, 'utf-8'));
+
+    // Analyze and categorize emails
+    const analysis = analyzeEmails(emails);
+
+    res.json({
+      success: true,
+      totalEmails: emails.length,
+      analysis
+    });
+  } catch (error) {
+    console.error('Error analyzing emails:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to analyze emails'
+    });
+  }
+});
+
+/**
+ * Analyze emails to find examples for different criteria types.
+ */
+function analyzeEmails(emails: EmailData[]) {
+  // Extract domain from email address
+  const getDomain = (email: string): string => {
+    const match = email.match(/@([^@]+)$/);
+    return match ? match[1].toLowerCase() : '';
+  };
+
+  // Check if email has a subdomain
+  const hasSubdomain = (email: string): boolean => {
+    const domain = getDomain(email);
+    const parts = domain.split('.');
+    return parts.length > 2;
+  };
+
+  // Get subdomain if present
+  const getSubdomain = (email: string): string => {
+    const domain = getDomain(email);
+    const parts = domain.split('.');
+    if (parts.length > 2) {
+      return parts.slice(0, -2).join('.');
+    }
+    return '';
+  };
+
+  // Get primary domain
+  const getPrimaryDomain = (email: string): string => {
+    const domain = getDomain(email);
+    const parts = domain.split('.');
+    if (parts.length > 2) {
+      return parts.slice(-2).join('.');
+    }
+    return domain;
+  };
+
+  // Categorize emails
+  const byCategory: Record<string, EmailData[]> = {};
+  const withSubdomains: EmailData[] = [];
+  const withOtpKeywords: EmailData[] = [];
+  const withNewsletterKeywords: EmailData[] = [];
+  const withReportKeywords: EmailData[] = [];
+  const withPaymentKeywords: EmailData[] = [];
+  const withSpecialChars: EmailData[] = [];
+  const longSubjects: EmailData[] = [];
+  const fromNoreply: EmailData[] = [];
+  const uniqueDomains: Map<string, EmailData> = new Map();
+
+  for (const email of emails) {
+    // By classification category
+    if (!byCategory[email.category]) {
+      byCategory[email.category] = [];
+    }
+    if (byCategory[email.category].length < 5) {
+      byCategory[email.category].push(email);
+    }
+
+    // Unique domains (first email from each domain)
+    const primaryDomain = getPrimaryDomain(email.email);
+    if (!uniqueDomains.has(primaryDomain)) {
+      uniqueDomains.set(primaryDomain, email);
+    }
+
+    // Emails with subdomains
+    if (hasSubdomain(email.email) && withSubdomains.length < 10) {
+      withSubdomains.push(email);
+    }
+
+    // Subject line analysis
+    const subjectLower = email.subject.toLowerCase();
+
+    // OTP/verification keywords
+    if ((subjectLower.includes('code') ||
+         subjectLower.includes('verify') ||
+         subjectLower.includes('otp') ||
+         subjectLower.includes('verification') ||
+         subjectLower.includes('confirm')) &&
+        withOtpKeywords.length < 5) {
+      withOtpKeywords.push(email);
+    }
+
+    // Newsletter keywords
+    if ((subjectLower.includes('newsletter') ||
+         subjectLower.includes('digest') ||
+         subjectLower.includes('weekly') ||
+         subjectLower.includes('update')) &&
+        withNewsletterKeywords.length < 5) {
+      withNewsletterKeywords.push(email);
+    }
+
+    // Report/statement keywords
+    if ((subjectLower.includes('report') ||
+         subjectLower.includes('statement') ||
+         subjectLower.includes('monthly') ||
+         subjectLower.includes('summary')) &&
+        withReportKeywords.length < 5) {
+      withReportKeywords.push(email);
+    }
+
+    // Payment/receipt keywords
+    if ((subjectLower.includes('payment') ||
+         subjectLower.includes('receipt') ||
+         subjectLower.includes('invoice') ||
+         subjectLower.includes('order')) &&
+        withPaymentKeywords.length < 5) {
+      withPaymentKeywords.push(email);
+    }
+
+    // Special characters in subject
+    if ((/[&<>"']/.test(email.subject) ||
+         /[^\x00-\x7F]/.test(email.subject)) &&
+        withSpecialChars.length < 5) {
+      withSpecialChars.push(email);
+    }
+
+    // Long subjects
+    if (email.subject.length > 80 && longSubjects.length < 5) {
+      longSubjects.push(email);
+    }
+
+    // From noreply addresses
+    if (email.email.toLowerCase().includes('noreply') && fromNoreply.length < 5) {
+      fromNoreply.push(email);
+    }
+  }
+
+  return {
+    summary: {
+      totalEmails: emails.length,
+      uniqueDomains: uniqueDomains.size,
+      categoryCounts: Object.entries(byCategory).map(([cat, emails]) => ({
+        category: cat,
+        count: emails.length
+      }))
+    },
+    byCategory,
+    subdomainExamples: withSubdomains.map(e => ({
+      from: e.from,
+      email: e.email,
+      subdomain: getSubdomain(e.email),
+      primaryDomain: getPrimaryDomain(e.email),
+      subject: e.subject,
+      toEmails: e.toEmails,
+      date: e.date
+    })),
+    otpExamples: withOtpKeywords.map(e => ({
+      from: e.from,
+      email: e.email,
+      subject: e.subject,
+      toEmails: e.toEmails,
+      date: e.date
+    })),
+    newsletterExamples: withNewsletterKeywords.map(e => ({
+      from: e.from,
+      email: e.email,
+      subject: e.subject,
+      toEmails: e.toEmails,
+      date: e.date
+    })),
+    reportExamples: withReportKeywords.map(e => ({
+      from: e.from,
+      email: e.email,
+      subject: e.subject,
+      toEmails: e.toEmails,
+      date: e.date
+    })),
+    paymentExamples: withPaymentKeywords.map(e => ({
+      from: e.from,
+      email: e.email,
+      subject: e.subject,
+      toEmails: e.toEmails,
+      date: e.date
+    })),
+    specialCharExamples: withSpecialChars.map(e => ({
+      from: e.from,
+      email: e.email,
+      subject: e.subject,
+      toEmails: e.toEmails,
+      date: e.date
+    })),
+    longSubjectExamples: longSubjects.map(e => ({
+      from: e.from,
+      email: e.email,
+      subject: e.subject,
+      subjectLength: e.subject.length,
+      toEmails: e.toEmails,
+      date: e.date
+    })),
+    noreplyExamples: fromNoreply.map(e => ({
+      from: e.from,
+      email: e.email,
+      subject: e.subject,
+      toEmails: e.toEmails,
+      date: e.date
+    }))
+  };
 }
 
 export default router;

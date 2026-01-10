@@ -7,7 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { EmailData, DomainGroup, SubdomainGroup, EmailPattern } from '../types/index.js';
-import { matchEmail } from './criteria.js';
+// NOTE: matchEmail import removed - all matching done by SQL stored procedure
 
 const PROJECT_ROOT = process.cwd();
 const LOGS_DIR = path.join(PROJECT_ROOT, 'logs');
@@ -83,30 +83,7 @@ export function shouldRefreshCache(): boolean {
   return cache.ageHours > CACHE_MAX_AGE_HOURS;
 }
 
-/**
- * Extract sender (local part) from email address.
- */
-function extractSender(emailAddress: string): string {
-  if (!emailAddress || !emailAddress.includes('@')) {
-    return '';
-  }
-  return emailAddress.split('@')[0] ?? '';
-}
-
-/**
- * Get display name for subdomain relative to primary domain.
- */
-function getSubdomainDisplayName(subdomain: string, primaryDomain: string): string {
-  if (!subdomain || subdomain === primaryDomain) {
-    return '(direct)';
-  }
-  // Remove the primary domain suffix to show just the subdomain part
-  if (subdomain.endsWith(primaryDomain)) {
-    const prefix = subdomain.slice(0, -(primaryDomain.length + 1)); // +1 for the dot
-    return prefix || '(direct)';
-  }
-  return subdomain;
-}
+// NO PARSING IN TYPESCRIPT - SQL handles all email/domain extraction
 
 /**
  * Group emails by domain > subdomain > sender > subject pattern.
@@ -130,7 +107,7 @@ export function groupEmailsByPattern(emailDetails: EmailData[]): DomainGroup[] {
   for (const email of emailDetails) {
     const primaryDomain = email.primaryDomain || 'unknown';
     const subdomain = email.subdomain || primaryDomain;
-    const sender = extractSender(email.email);
+    const sender = email.email;  // NO PARSING - use raw email
     const subject = email.subject.slice(0, 50);
     const category = email.category || 'UNKNOWN';
     const patternKey = `${sender}:${category}:${subject}`;
@@ -207,7 +184,7 @@ export function groupEmailsByPattern(emailDetails: EmailData[]): DomainGroup[] {
 
       subdomainGroups.push({
         subdomain,
-        displayName: getSubdomainDisplayName(subdomain, primaryDomain),
+        displayName: subdomain,  // NO PARSING - use raw subdomain
         totalEmails: patternList.reduce((sum, p) => sum + p.count, 0),
         patterns: patternList
       });
@@ -230,31 +207,8 @@ export function groupEmailsByPattern(emailDetails: EmailData[]): DomainGroup[] {
   return result;
 }
 
-/**
- * Filter out emails that already have a decision:
- * - Matches delete criteria (will be deleted)
- * - Matches keep criteria (will be kept)
- * - Any action assigned by the unified criteria
- */
-export function filterDecidedEmails(
-  emails: EmailData[]
-): { filtered: EmailData[]; removedCount: number } {
-  const filtered: EmailData[] = [];
-  let removedCount = 0;
-
-  for (const email of emails) {
-    const result = matchEmail(email);
-
-    // If matchEmail returns an action, the email has a decision
-    if (result.action !== null) {
-      removedCount++;
-    } else {
-      filtered.push(email);
-    }
-  }
-
-  return { filtered, removedCount };
-}
+// NOTE: filterDecidedEmails was deleted - filtering is now done by SQL
+// The pending_emails table has an 'action' column populated by EvaluatePendingEmails stored procedure
 
 /**
  * Get cache stats.

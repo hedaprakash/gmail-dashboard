@@ -66,200 +66,224 @@ export interface LogEntry {
 }
 
 // ============================================================================
-// Test Scenarios Definition (V2 - Email Format)
+// Test Scenarios Definition (V3 - Based on Real Gmail Emails)
+// ============================================================================
+// These test scenarios are based on real Gmail email patterns with only the
+// domain changed to test domains. The fromEmail uses the extracted email
+// address (not the full From header), matching real Gmail API data structure.
 // ============================================================================
 
 export const TEST_SCENARIOS: TestScenario[] = [
-  // === Domain Operations (T01-T04) ===
+  // === Domain Operations (T01-T04) - Based on Real Promotional Emails ===
   {
     id: 'T01',
-    description: 'Delete a domain',
-    fromEmail: 'sender@testdomain-01.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Sample Email Subject',
+    description: 'Delete promo domain (Tracfone pattern)',
+    // Real email: TracFone@email2.tracfone.com
+    fromEmail: 'TracFone@email2.testdomain-01.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Quick! Join Rewards for 200 points now!',  // Real subject
     clickButton: 'delete',
     expectedOutcome: 'Domain testdomain-01.com → delete'
   },
   {
     id: 'T02',
-    description: 'Delete 1D domain (protect OTPs)',
-    fromEmail: 'sender@testdomain-02.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Your verification code',
+    description: 'Delete 1D verification (TikTok pattern)',
+    // Real email: noreply@account.tiktok.com
+    fromEmail: 'noreply@account.testdomain-02.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: '235614 is your verification code',  // Real subject
     clickButton: 'delete_1d',
     expectedOutcome: 'Domain testdomain-02.com → delete_1d'
   },
   {
     id: 'T03',
-    description: 'Delete 10D domain (monthly reports)',
-    fromEmail: 'sender@testdomain-03.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Monthly Analytics Report',
+    description: 'Delete 10D statement (Google Fi pattern)',
+    // Real email: payments-noreply@google.com
+    fromEmail: 'payments-noreply@testdomain-03.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Your Google Fi monthly statement',  // Real subject
     clickButton: 'delete_10d',
     expectedOutcome: 'Domain testdomain-03.com → delete_10d'
   },
   {
     id: 'T04',
-    description: 'Keep All for important domain',
-    fromEmail: 'ceo@testdomain-04.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Quarterly Review Meeting',
+    description: 'Keep All security alerts (Google pattern)',
+    // Real email: no-reply@accounts.google.com
+    fromEmail: 'no-reply@accounts.testdomain-04.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Security alert',  // Real subject
     clickButton: 'keep_all',
     expectedOutcome: 'Domain testdomain-04.com → keep'
   },
 
-  // === Subject Pattern Operations (T05-T08) ===
+  // === Subject Pattern Operations (T05-T08) - Based on Real Patterns ===
   {
     id: 'T05',
-    description: 'Delete with pattern selection',
-    fromEmail: 'news@testdomain-05.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Weekly Newsletter Digest',
-    selectText: 'Newsletter',
+    description: 'Delete newsletter pattern (TubeBuddy pattern)',
+    // Real email: hello@tubebuddy.com
+    fromEmail: 'hello@testdomain-05.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'We Have Some Insights For You',  // Real subject
+    selectText: 'Insights',
     clickButton: 'delete',
-    expectedOutcome: 'Pattern "Newsletter" → delete'
+    expectedOutcome: 'Pattern "Insights" → delete'
   },
   {
     id: 'T06',
-    description: 'Delete 1D with pattern (OTP codes)',
-    fromEmail: 'alerts@testdomain-06.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Your Verification Code is 123456',
-    selectText: 'Verification Code',
+    description: 'Delete 1D verification pattern',
+    // Real email: TracFone@email2.tracfone.com
+    fromEmail: 'TracFone@email2.testdomain-06.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Your Tracfone Verification code',  // Real subject
+    selectText: 'Verification code',
     clickButton: 'delete_1d',
-    expectedOutcome: 'Pattern "Verification Code" → delete_1d'
+    expectedOutcome: 'Pattern "Verification code" → delete_1d'
   },
   {
     id: 'T07',
-    description: 'Delete 10D with pattern',
-    fromEmail: 'reports@testdomain-07.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Monthly Report - December 2024',
-    selectText: 'Monthly Report',
+    description: 'Delete 10D monthly pattern',
+    // Real email: payments-noreply@google.com
+    fromEmail: 'payments-noreply@testdomain-07.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Your Project Fi monthly statement',  // Real subject
+    selectText: 'monthly statement',
     clickButton: 'delete_10d',
-    expectedOutcome: 'Pattern "Monthly Report" → delete_10d'
+    expectedOutcome: 'Pattern "monthly statement" → delete_10d'
   },
   {
     id: 'T08',
-    description: 'Keep with pattern selection',
-    fromEmail: 'billing@testdomain-08.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Payment Received - Invoice #12345',
-    selectText: 'Payment Received',
+    description: 'Keep receipt pattern',
+    // Real email: projectfi-noreply@google.com
+    fromEmail: 'projectfi-noreply@testdomain-08.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Your Project Fi Order Receipt from Mar 20, 2018',  // Real subject
+    selectText: 'Order Receipt',
     clickButton: 'keep',
-    expectedOutcome: 'Pattern "Payment Received" → keep'
+    expectedOutcome: 'Pattern "Order Receipt" → keep'
   },
 
-  // === Subdomain Operations (T09-T12) ===
+  // === Subdomain Operations (T09-T12) - Based on Real Subdomains ===
   {
     id: 'T09',
-    description: 'Delete subdomain',
-    fromEmail: 'sender@mail.testdomain-09.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Email from mail subdomain',
+    description: 'Delete email2 subdomain (Tracfone pattern)',
+    // Real email: TracFone@email2.tracfone.com
+    fromEmail: 'TracFone@email2.testdomain-09.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Introducing a new plan with truly unlimited data',  // Real subject
     clickButton: 'delete',
-    expectedOutcome: 'Subdomain mail.testdomain-09.com → delete'
+    expectedOutcome: 'Subdomain email2.testdomain-09.com → delete'
   },
   {
     id: 'T10',
-    description: 'Delete 1D subdomain',
-    fromEmail: 'sender@news.testdomain-10.com',
-    toEmail: 'testuser@test.local',
-    subject: 'News update from subdomain',
+    description: 'Delete 1D account subdomain (TikTok pattern)',
+    // Real email: noreply@account.tiktok.com
+    fromEmail: 'noreply@account.testdomain-10.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: '847291 is your verification code',  // Real pattern
     clickButton: 'delete_1d',
-    expectedOutcome: 'Subdomain news.testdomain-10.com → delete_1d'
+    expectedOutcome: 'Subdomain account.testdomain-10.com → delete_1d'
   },
   {
     id: 'T11',
-    description: 'Delete 10D subdomain',
-    fromEmail: 'sender@promo.testdomain-11.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Special promotional offer',
+    description: 'Delete 10D emails subdomain (Thanx pattern)',
+    // Real email: thanxapp@emails.thanx.com
+    fromEmail: 'thanxapp@emails.testdomain-11.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Future of the Thanx app.',  // Real subject
     clickButton: 'delete_10d',
-    expectedOutcome: 'Subdomain promo.testdomain-11.com → delete_10d'
+    expectedOutcome: 'Subdomain emails.testdomain-11.com → delete_10d'
   },
   {
     id: 'T12',
-    description: 'Keep All subdomain',
-    fromEmail: 'sender@alerts.testdomain-12.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Important security alert',
+    description: 'Keep All accounts subdomain (Google pattern)',
+    // Real email: no-reply@accounts.google.com
+    fromEmail: 'no-reply@accounts.testdomain-12.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Security alert',  // Real subject
     clickButton: 'keep_all',
-    expectedOutcome: 'Subdomain alerts.testdomain-12.com → keep'
+    expectedOutcome: 'Subdomain accounts.testdomain-12.com → keep'
   },
 
-  // === Del All / Keep All Operations (T13-T16) ===
+  // === Del All / Keep All Operations (T13-T16) - Based on Real Emails ===
   {
     id: 'T13',
-    description: 'Del All for spam domain',
-    fromEmail: 'spam@testdomain-13.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Amazing Deal - 80% Off!!!',
+    description: 'Del All for promo domain (Google One pattern)',
+    // Real email: googleone-updates-noreply@google.com
+    fromEmail: 'googleone-updates-noreply@testdomain-13.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'New member benefit: even more ways to edit your photos',  // Real subject
     clickButton: 'del_all',
     expectedOutcome: 'Domain testdomain-13.com → delete'
   },
   {
     id: 'T14',
-    description: 'Delete 1D - protect recent messages',
-    fromEmail: 'noreply@testdomain-14.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Auto-generated message',
+    description: 'Delete 1D noreply (Google AdSense pattern)',
+    // Real email: adsense-noreply@google.com
+    fromEmail: 'adsense-noreply@testdomain-14.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Expanded ad serving protections for minors',  // Real subject
     clickButton: 'delete_1d',
     expectedOutcome: 'Domain testdomain-14.com → delete_1d'
   },
   {
     id: 'T15',
-    description: 'Delete 10D - keep for archival',
-    fromEmail: 'system@testdomain-15.com',
-    toEmail: 'testuser@test.local',
-    subject: 'System notification',
+    description: 'Delete 10D (Google Voice pattern)',
+    // Real email: voice-noreply@google.com
+    fromEmail: 'voice-noreply@testdomain-15.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Your Google Voice number (650) 691-8947 will expire in 30 days',  // Real subject
     clickButton: 'delete_10d',
     expectedOutcome: 'Domain testdomain-15.com → delete_10d'
   },
   {
     id: 'T16',
-    description: 'Keep All for VIP domain',
-    fromEmail: 'vip@testdomain-16.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Important VIP message',
+    description: 'Keep All for support domain (Google Fi pattern)',
+    // Real email: google-fi-support@google.com (no display name in original)
+    fromEmail: 'google-fi-support@testdomain-16.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: '[0-8781000036082] Your Google Fi Support Inquiry: Case ID',  // Real subject
     clickButton: 'keep_all',
     expectedOutcome: 'Domain testdomain-16.com → keep'
   },
 
-  // === Edge Cases (T17-T20) ===
+  // === Edge Cases (T17-T20) - Based on Real Gmail Quirks ===
   {
     id: 'T17',
-    description: 'Long email and subject',
-    fromEmail: 'very-long-sender-name@very-long-domain-name-example.com',
-    toEmail: 'testuser@test.local',
-    subject: 'This is a very long subject line that should wrap to multiple lines in the UI to test layout handling',
+    description: 'Subdomain with fi prefix (Assurant pattern)',
+    // Real email: device-protection@fi.assurant.com
+    fromEmail: 'device-protection@fi.testdomain-17.com',
+    toEmail: 'SQLFEATURES@gmail.com',  // Real: uppercase in toEmail
+    subject: 'Your Google Fi device is now covered',  // Real subject
     clickButton: 'delete',
-    expectedOutcome: 'Domain very-long-domain-name-example.com → delete'
+    expectedOutcome: 'Domain testdomain-17.com → delete'
   },
   {
     id: 'T18',
-    description: 'Special characters in email',
-    fromEmail: 'special+chars@test-domain-18.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Subject with "quotes" & symbols! @#$%',
+    description: 'Unicode in subject (Google pattern)',
+    // Real email: no-reply@google.com with emoji in subject
+    fromEmail: 'no-reply@testdomain-18.com',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: '✅ Prakash, finish setting up your Motorola moto g play - 2024 device with Google',  // Real subject with emoji
     clickButton: 'delete',
-    expectedOutcome: 'Domain test-domain-18.com → delete'
+    expectedOutcome: 'Domain testdomain-18.com → delete'
   },
   {
     id: 'T19',
-    description: 'Case sensitivity test',
-    fromEmail: 'UPPERCASE@TESTDOMAIN-19.COM',
-    toEmail: 'testuser@test.local',
-    subject: 'UPPERCASE SUBJECT LINE',
+    description: 'Mixed case email (Facebook pattern)',
+    // Real email: security@facebookmail.com
+    fromEmail: 'security@TESTDOMAIN-19.COM',
+    toEmail: 'sqlfeatures@gmail.com',
+    subject: 'Security alert',  // Real subject pattern
     clickButton: 'delete',
     expectedOutcome: 'Domain testdomain-19.com → delete (lowercase)'
   },
   {
     id: 'T20',
-    description: 'Unicode characters',
-    fromEmail: 'sender@testdomain-20.com',
-    toEmail: 'testuser@test.local',
-    subject: 'Unicode subject: Café résumé naïve',
+    description: 'Personal email forward (Prakash pattern)',
+    // Real email: sqlfeatures@gmail.com
+    fromEmail: 'sqlfeatures@testdomain-20.com',
+    toEmail: 'prakash.heda@gmail.com',  // Real: different recipient
+    subject: 'Fwd: Your Project Fi Order from Nov 24, 2017 Has Shipped',  // Real subject with Fwd:
     clickButton: 'delete',
     expectedOutcome: 'Domain testdomain-20.com → delete'
   }
@@ -322,36 +346,10 @@ export async function clearTestData(userEmail: string = TEST_USER_EMAIL): Promis
 // ============================================================================
 
 /**
- * Determine if fromEmail is a subdomain.
- * Returns the subdomain if found, undefined otherwise.
- */
-function getSubdomainFromEmail(email: string): string | undefined {
-  const match = email.match(/@([^.]+)\.([^.]+\.[^.]+)$/);
-  if (match && match[1]) {
-    return match[1];  // e.g., 'mail' from 'sender@mail.example.com'
-  }
-  return undefined;
-}
-
-/**
- * Extract domain from email address.
- * E.g., "sender@mail.example.com" -> "mail.example.com"
- */
-function getDomainFromEmail(email: string): string {
-  const atIndex = email.indexOf('@');
-  if (atIndex === -1) return email;
-  return email.slice(atIndex + 1).toLowerCase();
-}
-
-/**
  * Build the API endpoint and body for a test scenario.
- * Matches exactly how Review page calls the API.
+ * NO PARSING - pass raw fromEmail to stored procedure, let SQL handle it.
  */
 function buildApiRequest(scenario: TestScenario): { endpoint: string; body: Record<string, unknown> } {
-  // Determine level based on fromEmail structure
-  const subdomain = getSubdomainFromEmail(scenario.fromEmail);
-  const level = subdomain ? 'subdomain' : 'domain';
-
   // Determine endpoint based on button clicked
   let endpoint: string;
   let body: Record<string, unknown>;
@@ -359,10 +357,10 @@ function buildApiRequest(scenario: TestScenario): { endpoint: string; body: Reco
   switch (scenario.clickButton) {
     case 'keep':
     case 'keep_all':
-      // mark-keep endpoint expects 'domain' and 'subject_pattern'
+      // mark-keep endpoint - pass raw fromEmail
       endpoint = '/api/actions/mark-keep';
       body = {
-        domain: getDomainFromEmail(scenario.fromEmail),
+        fromEmail: scenario.fromEmail,
         subject_pattern: scenario.selectText || '',
         category: 'TEST'
       };
@@ -373,7 +371,6 @@ function buildApiRequest(scenario: TestScenario): { endpoint: string; body: Reco
       body = {
         fromEmail: scenario.fromEmail,
         subject: scenario.subject,
-        level,
         subject_pattern: scenario.selectText
       };
       break;
@@ -382,7 +379,6 @@ function buildApiRequest(scenario: TestScenario): { endpoint: string; body: Reco
       body = {
         fromEmail: scenario.fromEmail,
         subject: scenario.subject,
-        level,
         subject_pattern: scenario.selectText
       };
       break;
@@ -391,7 +387,6 @@ function buildApiRequest(scenario: TestScenario): { endpoint: string; body: Reco
       body = {
         fromEmail: scenario.fromEmail,
         subject: scenario.subject,
-        level,
         subject_pattern: scenario.selectText
       };
       break;
@@ -400,7 +395,6 @@ function buildApiRequest(scenario: TestScenario): { endpoint: string; body: Reco
       body = {
         fromEmail: scenario.fromEmail,
         subject: scenario.subject,
-        level,
         subject_pattern: scenario.selectText
       };
   }

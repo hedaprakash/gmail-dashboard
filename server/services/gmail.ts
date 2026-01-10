@@ -65,46 +65,7 @@ function extractEmailAddress(headerValue: string): string {
   return match ? match[1] : headerValue.trim();
 }
 
-// Two-level TLDs that require taking 3 parts for primary domain
-const TWO_LEVEL_TLDS = new Set([
-  'co.in', 'co.uk', 'co.nz', 'co.za', 'co.jp', 'co.kr',
-  'com.au', 'com.br', 'com.mx', 'com.sg', 'com.hk', 'com.tw',
-  'org.uk', 'org.au', 'org.in',
-  'net.au', 'net.in',
-  'gov.uk', 'gov.in',
-  'ac.uk', 'ac.in',
-  'edu.au', 'edu.in'
-]);
-
-/**
- * Extract subdomain and primary domain from email address.
- * Handles two-level TLDs like .co.in, .co.uk, .com.au correctly.
- */
-function extractDomainInfo(email: string): { subdomain: string; primaryDomain: string } {
-  if (!email.includes('@')) {
-    return { subdomain: '', primaryDomain: '' };
-  }
-  const fullDomain = email.split('@')[1] ?? '';
-  const parts = fullDomain.split('.');
-
-  if (parts.length < 2) {
-    return { subdomain: fullDomain, primaryDomain: fullDomain };
-  }
-
-  // Check if last two parts form a two-level TLD
-  const lastTwo = parts.slice(-2).join('.').toLowerCase();
-  let primaryDomain: string;
-
-  if (TWO_LEVEL_TLDS.has(lastTwo) && parts.length >= 3) {
-    // Two-level TLD: take last 3 parts (e.g., sbi.co.in)
-    primaryDomain = parts.slice(-3).join('.');
-  } else {
-    // Standard TLD: take last 2 parts (e.g., google.com)
-    primaryDomain = parts.slice(-2).join('.');
-  }
-
-  return { subdomain: fullDomain, primaryDomain };
-}
+// NO PARSING IN TYPESCRIPT - SQL handles all domain extraction
 
 /**
  * Get a header value by name from message headers.
@@ -410,7 +371,7 @@ export async function fetchAllUnreadEmails(
 
         const fromHeader = getHeaderValue(headers, 'From');
         const email = extractEmailAddress(fromHeader);
-        const { subdomain, primaryDomain } = extractDomainInfo(email);
+        // NO PARSING - subdomain/primaryDomain will come from SQL
 
         const toHeader = getHeaderValue(headers, 'To');
         const toEmails = toHeader
@@ -432,8 +393,8 @@ export async function fetchAllUnreadEmails(
           id: msgInfo.id!,
           email,
           from: fromHeader,
-          subdomain,
-          primaryDomain,
+          subdomain: '',  // Will be populated by SQL
+          primaryDomain: '',  // Will be populated by SQL
           subject,
           toEmails,
           ccEmails,
@@ -626,6 +587,111 @@ export async function emptySpamFolder(
 
   console.log(`Spam emails: found ${count}, deleted ${deleted}, errors ${errors}`);
   return { count, deleted: dryRun ? 0 : deleted, errors };
+}
+
+/**
+ * Fetch read emails for analysis (testing purposes).
+ * Unlike fetchAllUnreadEmails, this fetches already-read emails.
+ */
+export async function fetchReadEmails(
+  maxEmails: number = 500,
+  onProgress?: (count: number) => void
+): Promise<EmailData[]> {
+  const gmail = await getGmailService();
+  const emailDetails: EmailData[] = [];
+  let pageToken: string | undefined;
+  let totalFetched = 0;
+
+  console.log(`Fetching up to ${maxEmails} READ emails for analysis...`);
+
+  while (totalFetched < maxEmails) {
+    const response = await gmail.users.messages.list({
+      userId: 'me',
+      q: 'is:read',  // Only read emails
+      maxResults: Math.min(BATCH_SIZE, maxEmails - totalFetched),
+      pageToken
+    });
+
+    const messages = response.data.messages;
+    if (!messages || messages.length === 0) {
+      break;
+    }
+
+    console.log(`Fetched batch of ${messages.length} message IDs...`);
+
+    // Process each message
+    for (const msgInfo of messages) {
+      if (totalFetched >= maxEmails) {
+        break;
+      }
+
+      try {
+        const message = await gmail.users.messages.get({
+          userId: 'me',
+          id: msgInfo.id!,
+          format: 'metadata',
+          metadataHeaders: ['From', 'To', 'Cc', 'Subject', 'Date']
+        });
+
+        const headers = message.data.payload?.headers ?? [];
+
+        const fromHeader = getHeaderValue(headers, 'From');
+        const email = extractEmailAddress(fromHeader);
+
+        const toHeader = getHeaderValue(headers, 'To');
+        const toEmails = toHeader
+          ? toHeader.split(',').map(e => extractEmailAddress(e.trim())).join(', ')
+          : '';
+
+        const ccHeader = getHeaderValue(headers, 'Cc');
+        const ccEmails = ccHeader
+          ? ccHeader.split(',').map(e => extractEmailAddress(e.trim())).join(', ')
+          : '';
+
+        const subject = getHeaderValue(headers, 'Subject');
+        const date = getHeaderValue(headers, 'Date');
+
+        // Classify the email by subject
+        const classification = classifyEmail(subject);
+
+        emailDetails.push({
+          id: msgInfo.id!,
+          email,
+          from: fromHeader,
+          subdomain: '',  // Will be populated by SQL
+          primaryDomain: '',  // Will be populated by SQL
+          subject,
+          toEmails,
+          ccEmails,
+          date,
+          category: classification.category,
+          categoryIcon: classification.icon,
+          categoryColor: classification.color,
+          categoryBg: classification.bgColor,
+          matchedKeyword: classification.matchedKeyword
+        });
+
+        totalFetched++;
+
+        if (totalFetched % 100 === 0) {
+          console.log(`Processed ${totalFetched} emails...`);
+          onProgress?.(totalFetched);
+        }
+      } catch (error) {
+        console.warn(`Error fetching message ${msgInfo.id}:`, error);
+        continue;
+      }
+    }
+
+    // Check for next page
+    pageToken = response.data.nextPageToken ?? undefined;
+    if (!pageToken) {
+      break;
+    }
+  }
+
+  console.log(`Successfully fetched ${emailDetails.length} READ emails.`);
+  return emailDetails;
 }
 
 /**

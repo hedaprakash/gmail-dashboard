@@ -278,19 +278,16 @@ router.post('/rule', async (req: Request, res: Response) => {
       subjectPattern
     });
 
-    // Extract domain for logging
-    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
-
     const message = subjectPattern
-      ? `Added ${action} rule for ${domain}: "${subjectPattern}"`
-      : `Set default ${action} for ${domain}`;
+      ? `Added ${action} rule for ${fromEmail}: "${subjectPattern}"`
+      : `Set default ${action} for ${fromEmail}`;
 
     console.log(`[${userEmail}] ${message}`);
 
     res.json({
       success: true,
       message: result.message,
-      domain,
+      fromEmail,
       action,
       subjectPattern,
       level,

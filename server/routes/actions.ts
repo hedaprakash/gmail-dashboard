@@ -8,8 +8,6 @@
 import { Router, Request, Response } from 'express';
 import {
   removeRule,
-  markKeepAsync,
-  getDomainCriteriaAsync,
   addRuleAsync,
   type Action
 } from '../services/criteria.js';
@@ -47,22 +45,16 @@ router.post('/add-criteria', async (req: Request, res: Response) => {
       subjectPattern: subject_pattern || undefined
     });
 
-    // Extract domain for logging (stored procedure does this properly)
-    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
+    // Log the action - use raw fromEmail, no parsing
+    logDelete(fromEmail, subject_pattern || '');
 
-    // Log the action
-    logDelete(domain, subject_pattern || '');
-
-    console.log(`[${userEmail}] Added delete rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
-
-    const rules = await getDomainCriteriaAsync(domain, userEmail);
+    console.log(`[${userEmail}] Added delete rule: ${fromEmail} (subject: ${subject_pattern || '(all)'})`);
 
     res.json({
       success: true,
       message: result.message,
-      domain,
+      fromEmail,
       subjectPattern: subject_pattern,
-      rules,
       criteriaId: result.criteriaId
     });
   } catch (error) {
@@ -103,22 +95,16 @@ router.post('/add-criteria-1d', async (req: Request, res: Response) => {
       subjectPattern: subject_pattern || undefined
     });
 
-    // Extract domain for logging
-    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
+    // Log the action - use raw fromEmail, no parsing
+    logDelete1d(fromEmail, subject_pattern || '');
 
-    // Log the action
-    logDelete1d(domain, subject_pattern || '');
-
-    console.log(`[${userEmail}] Added delete_1d rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
-
-    const rules = await getDomainCriteriaAsync(domain, userEmail);
+    console.log(`[${userEmail}] Added delete_1d rule: ${fromEmail} (subject: ${subject_pattern || '(all)'})`);
 
     res.json({
       success: true,
       message: result.message,
-      domain,
+      fromEmail,
       subjectPattern: subject_pattern,
-      rules,
       criteriaId: result.criteriaId
     });
   } catch (error) {
@@ -159,22 +145,16 @@ router.post('/add-criteria-10d', async (req: Request, res: Response) => {
       subjectPattern: subject_pattern || undefined
     });
 
-    // Extract domain for logging
-    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
+    // Log the action - use raw fromEmail, no parsing
+    logDelete10d(fromEmail, subject_pattern || '');
 
-    // Log the action
-    logDelete10d(domain, subject_pattern || '');
-
-    console.log(`[${userEmail}] Added delete_10d rule: ${domain} (subject: ${subject_pattern || '(all)'})`);
-
-    const rules = await getDomainCriteriaAsync(domain, userEmail);
+    console.log(`[${userEmail}] Added delete_10d rule: ${fromEmail} (subject: ${subject_pattern || '(all)'})`);
 
     res.json({
       success: true,
       message: result.message,
-      domain,
+      fromEmail,
       subjectPattern: subject_pattern,
-      rules,
       criteriaId: result.criteriaId
     });
   } catch (error) {
@@ -189,37 +169,43 @@ router.post('/add-criteria-10d', async (req: Request, res: Response) => {
 /**
  * POST /api/actions/mark-keep
  * Mark an email pattern as 'keep' - removes from delete criteria AND adds to keep.
+ * Accepts fromEmail (raw) - SQL extracts domain.
  */
 router.post('/mark-keep', async (req: Request, res: Response) => {
   try {
-    const { domain, subject_pattern, category } = req.body;
+    const { fromEmail, subject_pattern, category } = req.body;
     const userEmail = getUserEmail(req);
 
-    if (!domain) {
+    if (!fromEmail) {
       res.status(400).json({
         success: false,
-        error: 'Domain is required'
+        error: 'fromEmail is required'
       });
       return;
     }
 
-    // Use SQL-aware markKeepAsync function (with user context)
-    const { removedCount, rules } = await markKeepAsync(domain, userEmail, subject_pattern || undefined);
+    // Call addRuleAsync with action='keep' - SQL extracts domain from fromEmail
+    const result = await addRuleAsync({
+      fromEmail,
+      toEmail: userEmail,
+      subject: '',
+      action: 'keep',
+      level: 'domain',
+      userEmail,
+      subjectPattern: subject_pattern || undefined
+    });
 
-    // Log the action
-    logKeep(domain, subject_pattern || '', category, removedCount);
+    // Log the action - use raw fromEmail, no parsing
+    logKeep(fromEmail, subject_pattern || '', category, 0);
 
-    console.log(`[${userEmail}] Marked keep: ${domain} (subject: ${subject_pattern || '(all)'}) - removed ${removedCount} delete rules`);
+    console.log(`[${userEmail}] Marked keep: ${fromEmail} (subject: ${subject_pattern || '(all)'})`);
 
     res.json({
       success: true,
-      message: subject_pattern
-        ? `Added keep pattern for ${domain}`
-        : `Set default keep for ${domain}`,
-      domain,
+      message: result.message,
+      fromEmail,
       subjectPattern: subject_pattern,
-      rules,
-      removed_from_delete: removedCount
+      criteriaId: result.criteriaId
     });
   } catch (error) {
     console.error('Error marking keep:', error);
@@ -327,19 +313,13 @@ router.post('/set-default', async (req: Request, res: Response) => {
       userEmail
     });
 
-    // Extract domain for logging
-    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
-
-    console.log(`[${userEmail}] Set default ${action} for ${domain}`);
-
-    const rules = await getDomainCriteriaAsync(domain, userEmail);
+    console.log(`[${userEmail}] Set default ${action} for ${fromEmail}`);
 
     res.json({
       success: true,
       message: result.message,
-      domain,
+      fromEmail,
       action,
-      rules,
       criteriaId: result.criteriaId
     });
   } catch (error) {
@@ -394,20 +374,14 @@ router.post('/add-pattern', async (req: Request, res: Response) => {
       subjectPattern: pattern
     });
 
-    // Extract domain for logging
-    const domain = fromEmail.includes('@') ? fromEmail.split('@')[1] : fromEmail;
-
-    console.log(`[${userEmail}] Added ${action} pattern for ${domain}: "${pattern}"`);
-
-    const rules = await getDomainCriteriaAsync(domain, userEmail);
+    console.log(`[${userEmail}] Added ${action} pattern for ${fromEmail}: "${pattern}"`);
 
     res.json({
       success: true,
       message: result.message,
-      domain,
+      fromEmail,
       action,
       pattern,
-      rules,
       criteriaId: result.criteriaId
     });
   } catch (error) {

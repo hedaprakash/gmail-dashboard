@@ -5,13 +5,12 @@
  * All criteria are stored per-user with audit logging for all changes.
  */
 
-import type { EmailData } from '../types/index.js';
+// NOTE: EmailData import removed - no TypeScript matching, SQL handles all evaluation
 import {
   queryAll,
   queryOne,
   query,
   insert,
-  remove,
   logAudit,
   type CriteriaRow,
   type PatternRow,
@@ -42,15 +41,7 @@ export interface UnifiedCriteria {
   [primaryDomain: string]: DomainRules;
 }
 
-// Result of matching an email against criteria
-export interface MatchResult {
-  action: Action | null;
-  matchedDomain: string;
-  matchedSubdomain?: string;
-  matchedPattern?: string;
-  matchedEmail?: string;
-  reason: string;
-}
+// NOTE: MatchResult interface removed - no TypeScript matching, SQL handles all evaluation
 
 // Cache for criteria
 let criteriaCache: UnifiedCriteria | null = null;
@@ -360,9 +351,8 @@ async function removeRuleFromSQL(
     criteriaCache = null;
     return result.success;
   } else {
-    // Remove entire domain
-    const dimension = domainLower.includes('@') ? 'email' : 'domain';
-    const result = await callModifyCriteria('REMOVE', dimension, userEmail, domainLower);
+    // Remove entire domain - NO PARSING, let SQL figure out dimension
+    const result = await callModifyCriteria('REMOVE', 'domain', userEmail, domainLower);
     criteriaCache = null;
     return result.success;
   }
@@ -462,211 +452,8 @@ export function invalidateCache(): void {
   criteriaCacheTime = 0;
 }
 
-/**
- * Check if a subject matches any pattern in a list (case-insensitive contains).
- */
-function matchesSubjectPattern(subject: string, patterns: string[]): string | null {
-  const subjectLower = subject.toLowerCase();
-  for (const pattern of patterns) {
-    if (subjectLower.includes(pattern.toLowerCase())) {
-      return pattern;
-    }
-  }
-  return null;
-}
-
-/**
- * Check if subject contains any excluded term.
- */
-function isExcludedSubject(subject: string, excludeSubjects: string[]): boolean {
-  const subjectLower = subject.toLowerCase();
-  return excludeSubjects.some(term => subjectLower.includes(term.toLowerCase()));
-}
-
-/**
- * Check if an email address matches any in a list.
- */
-function matchesEmailPattern(email: string, patterns: string[]): string | null {
-  const emailLower = email.toLowerCase();
-  for (const pattern of patterns) {
-    if (emailLower === pattern.toLowerCase()) {
-      return pattern;
-    }
-  }
-  return null;
-}
-
-/**
- * Get the action for an email based on domain rules.
- * Priority: fromEmails/toEmails > subject patterns (keep > delete > delete_1d) > excludeSubjects > default
- */
-function getActionFromRules(
-  rules: DomainRules,
-  subject: string,
-  fromEmail?: string,
-  toEmail?: string
-): { action: Action | null; pattern?: string; matchedEmail?: string; reason: string } {
-  // 0. Check fromEmails (highest priority)
-  if (fromEmail && rules.fromEmails) {
-    if (rules.fromEmails.keep?.length) {
-      const matched = matchesEmailPattern(fromEmail, rules.fromEmails.keep);
-      if (matched) {
-        return { action: 'keep', matchedEmail: matched, reason: 'from email matches keep list' };
-      }
-    }
-    if (rules.fromEmails.delete?.length) {
-      const matched = matchesEmailPattern(fromEmail, rules.fromEmails.delete);
-      if (matched) {
-        return { action: 'delete', matchedEmail: matched, reason: 'from email matches delete list' };
-      }
-    }
-  }
-
-  // 0b. Check toEmails
-  if (toEmail && rules.toEmails) {
-    if (rules.toEmails.keep?.length) {
-      const matched = matchesEmailPattern(toEmail, rules.toEmails.keep);
-      if (matched) {
-        return { action: 'keep', matchedEmail: matched, reason: 'to email matches keep list' };
-      }
-    }
-    if (rules.toEmails.delete?.length) {
-      const matched = matchesEmailPattern(toEmail, rules.toEmails.delete);
-      if (matched) {
-        return { action: 'delete', matchedEmail: matched, reason: 'to email matches delete list' };
-      }
-    }
-  }
-
-  // 1. Check explicit subject patterns (keep has highest priority)
-  if (rules.keep?.length) {
-    const matched = matchesSubjectPattern(subject, rules.keep);
-    if (matched) {
-      return { action: 'keep', pattern: matched, reason: 'subject matches keep pattern' };
-    }
-  }
-
-  if (rules.delete?.length) {
-    const matched = matchesSubjectPattern(subject, rules.delete);
-    if (matched) {
-      return { action: 'delete', pattern: matched, reason: 'subject matches delete pattern' };
-    }
-  }
-
-  if (rules.delete_1d?.length) {
-    const matched = matchesSubjectPattern(subject, rules.delete_1d);
-    if (matched) {
-      return { action: 'delete_1d', pattern: matched, reason: 'subject matches delete_1d pattern' };
-    }
-  }
-
-  if (rules.delete_10d?.length) {
-    const matched = matchesSubjectPattern(subject, rules.delete_10d);
-    if (matched) {
-      return { action: 'delete_10d', pattern: matched, reason: 'subject matches delete_10d pattern' };
-    }
-  }
-
-  // 2. Check excludeSubjects - if matched, KEEP the email
-  if (rules.excludeSubjects?.length && isExcludedSubject(subject, rules.excludeSubjects)) {
-    return { action: 'keep', reason: 'subject matches excludeSubjects (protected)' };
-  }
-
-  // 3. Apply default action (if set)
-  if (rules.default) {
-    return { action: rules.default, reason: 'default action' };
-  }
-
-  // 4. No match
-  return { action: null, reason: 'no matching rule' };
-}
-
-/**
- * Match an email against the unified criteria.
- * Returns the action to take and details about the match.
- */
-export function matchEmail(emailData: EmailData): MatchResult {
-  const criteria = loadUnifiedCriteria();
-  const primaryDomain = emailData.primaryDomain.toLowerCase();
-  const subdomain = emailData.subdomain?.toLowerCase() || '';
-  const subject = emailData.subject || '';
-  const fromEmail = emailData.email?.toLowerCase();
-  const toEmail = emailData.toEmails?.toLowerCase();
-
-  // Check if there's a specific email address rule (highest priority)
-  if (fromEmail && criteria[fromEmail]) {
-    const result = getActionFromRules(criteria[fromEmail], subject, fromEmail, toEmail);
-    return {
-      action: result.action,
-      matchedDomain: fromEmail,
-      matchedPattern: result.pattern,
-      matchedEmail: result.matchedEmail,
-      reason: result.reason,
-    };
-  }
-
-  // Look up the primary domain
-  const domainRules = criteria[primaryDomain];
-  if (!domainRules) {
-    return { action: null, matchedDomain: primaryDomain, reason: 'domain not in criteria' };
-  }
-
-  // Check if there's a subdomain-specific rule
-  if (subdomain && domainRules.subdomains) {
-    const subdomainRules = domainRules.subdomains[subdomain];
-    if (subdomainRules) {
-      // Use subdomain rules (completely overrides parent)
-      const result = getActionFromRules(subdomainRules, subject, fromEmail, toEmail);
-      return {
-        action: result.action,
-        matchedDomain: primaryDomain,
-        matchedSubdomain: subdomain,
-        matchedPattern: result.pattern,
-        matchedEmail: result.matchedEmail,
-        reason: result.reason,
-      };
-    }
-  }
-
-  // Use domain-level rules
-  const result = getActionFromRules(domainRules, subject, fromEmail, toEmail);
-  return {
-    action: result.action,
-    matchedDomain: primaryDomain,
-    matchedPattern: result.pattern,
-    matchedEmail: result.matchedEmail,
-    reason: result.reason,
-  };
-}
-
-/**
- * Check if email matches criteria for a specific action type.
- */
-export function matchesAction(emailData: EmailData, action: Action): boolean {
-  const result = matchEmail(emailData);
-  return result.action === action;
-}
-
-/**
- * Legacy compatibility: Check if email matches any "delete" criteria.
- */
-export function matchesDeleteCriteria(emailData: EmailData): boolean {
-  return matchesAction(emailData, 'delete');
-}
-
-/**
- * Legacy compatibility: Check if email matches any "delete_1d" criteria.
- */
-export function matchesDelete1dCriteria(emailData: EmailData): boolean {
-  return matchesAction(emailData, 'delete_1d');
-}
-
-/**
- * Legacy compatibility: Check if email matches any "keep" criteria.
- */
-export function matchesKeepCriteria(emailData: EmailData): boolean {
-  return matchesAction(emailData, 'keep');
-}
+// NOTE: All email matching logic is now handled by SQL stored procedure EvaluatePendingEmails.
+// TypeScript is a "dumb pipe" - no business logic for matching here.
 
 /**
  * Add a rule to the criteria (async, SQL-only).
@@ -830,127 +617,7 @@ export async function deleteDomainAsync(
   return true;
 }
 
-/**
- * Mark a domain/pattern as keep (SQL-aware with multi-user support).
- * Removes from delete/delete_1d/delete_10d lists and adds to keep.
- * Returns the number of delete rules removed.
- */
-export async function markKeepAsync(
-  domain: string,
-  userEmail?: string,
-  subjectPattern?: string
-): Promise<{ removedCount: number; rules: DomainRules | null }> {
-  const domainLower = domain.toLowerCase();
-  const user = userEmail || DEFAULT_USER;
-  let removedCount = 0;
-
-  // Get criteria ID for this domain and user
-  const result = await queryAll<{ id: number }>(
-    `SELECT id FROM criteria WHERE key_value = @domain AND key_type = 'domain' AND user_email = @userEmail`,
-    { domain: domainLower, userEmail: user }
-  );
-
-  if (result.length > 0) {
-    const criteriaId = result[0].id;
-
-    if (subjectPattern) {
-      // Remove specific pattern from delete lists
-      const patternLower = subjectPattern.toLowerCase();
-      const deleteResult = await query(
-        `DELETE FROM patterns
-         WHERE criteria_id = @criteriaId
-           AND action IN ('delete', 'delete_1d', 'delete_10d')
-           AND LOWER(pattern) = @pattern`,
-        { criteriaId, pattern: patternLower }
-      );
-      removedCount = deleteResult.rowsAffected?.[0] || 0;
-
-      if (removedCount > 0) {
-        await logAudit(user, 'DELETE', 'patterns', criteriaId, domainLower, {
-          operation: 'mark_keep',
-          removed_pattern: subjectPattern,
-          removed_count: removedCount
-        });
-      }
-
-      // Add to keep list (if not already there)
-      const existing = await queryAll<{ id: number }>(
-        `SELECT id FROM patterns
-         WHERE criteria_id = @criteriaId
-           AND action = 'keep'
-           AND LOWER(pattern) = @pattern`,
-        { criteriaId, pattern: patternLower }
-      );
-      if (existing.length === 0) {
-        const keepId = await insert('patterns', {
-          criteria_id: criteriaId,
-          action: 'keep',
-          pattern: subjectPattern,
-        });
-
-        await logAudit(user, 'INSERT', 'patterns', keepId, domainLower, {
-          operation: 'mark_keep',
-          action: 'keep',
-          pattern: subjectPattern
-        });
-      }
-    } else {
-      // Domain-level keep - remove all delete patterns and set default to keep
-      const deleteResult = await query(
-        `DELETE FROM patterns
-         WHERE criteria_id = @criteriaId
-           AND action IN ('delete', 'delete_1d', 'delete_10d')`,
-        { criteriaId }
-      );
-      removedCount = deleteResult.rowsAffected?.[0] || 0;
-
-      // Update default action to keep
-      await query(
-        `UPDATE criteria SET default_action = 'keep' WHERE id = @criteriaId`,
-        { criteriaId }
-      );
-
-      await logAudit(user, 'UPDATE', 'criteria', criteriaId, domainLower, {
-        operation: 'mark_keep_all',
-        removed_delete_patterns: removedCount,
-        new_default: 'keep'
-      });
-    }
-  } else {
-    // Domain doesn't exist yet, create it with keep
-    const criteriaId = await getOrCreateCriteria(domainLower, 'domain', user);
-    if (subjectPattern) {
-      const keepId = await insert('patterns', {
-        criteria_id: criteriaId,
-        action: 'keep',
-        pattern: subjectPattern,
-      });
-
-      await logAudit(user, 'INSERT', 'patterns', keepId, domainLower, {
-        operation: 'mark_keep_new_domain',
-        action: 'keep',
-        pattern: subjectPattern
-      });
-    } else {
-      await query(
-        `UPDATE criteria SET default_action = 'keep' WHERE id = @criteriaId`,
-        { criteriaId }
-      );
-
-      await logAudit(user, 'UPDATE', 'criteria', criteriaId, domainLower, {
-        operation: 'mark_keep_all_new_domain',
-        new_default: 'keep'
-      });
-    }
-  }
-
-  // Invalidate cache
-  criteriaCache = null;
-
-  // Get updated rules from SQL
-  const finalRules = await getDomainCriteriaAsync(domainLower, user);
-  return { removedCount, rules: finalRules };
-}
+// NOTE: markKeepAsync was deleted - mark-keep now uses addRuleAsync with action='keep'
 
 /**
  * Add exclude subjects to a domain.
@@ -1131,24 +798,5 @@ export type CriteriaEntry = {
   excludeSubject: string;
 };
 
-/**
- * Legacy: Check if email matches any criteria (for delete, delete_1d, or delete_10d).
- */
-export function matchesAnyCriteria(emailData: EmailData, _criteriaList?: CriteriaEntry[]): boolean {
-  const result = matchEmail(emailData);
-  return result.action === 'delete' || result.action === 'delete_1d' || result.action === 'delete_10d';
-}
-
-/**
- * Legacy compatibility: Check if email matches any "delete_10d" criteria.
- */
-export function matchesDelete10dCriteria(emailData: EmailData): boolean {
-  return matchesAction(emailData, 'delete_10d');
-}
-
-/**
- * Legacy: Check if email is in keep criteria.
- */
-export function matchesKeepList(emailData: EmailData): boolean {
-  return matchesKeepCriteria(emailData);
-}
+// NOTE: Legacy matching functions (matchesAnyCriteria, matchesDelete10dCriteria, matchesKeepList)
+// were deleted - all matching is now done by SQL stored procedure EvaluatePendingEmails
